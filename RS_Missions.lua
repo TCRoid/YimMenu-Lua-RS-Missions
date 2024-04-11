@@ -174,6 +174,20 @@ function IS_MISSION_CONTROLLER_SCRIPT_RUNNING()
     return IS_SCRIPT_RUNNING("fm_mission_controller_2020") or IS_SCRIPT_RUNNING("fm_mission_controller")
 end
 
+function GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+    local mission_script = "fm_mission_controller"
+    if IS_SCRIPT_RUNNING(mission_script) then
+        return mission_script
+    end
+
+    mission_script = "fm_mission_controller_2020"
+    if IS_SCRIPT_RUNNING(mission_script) then
+        return mission_script
+    end
+
+    return nil
+end
+
 --#endregion
 
 
@@ -343,12 +357,9 @@ menu_mission:add_sameline()
 MenuMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
 
 menu_mission:add_button("直接完成任务 (通用)", function()
-    local mission_script = "fm_mission_controller_2020"
-    if not IS_SCRIPT_RUNNING(mission_script) then
-        mission_script = "fm_mission_controller"
-        if not IS_SCRIPT_RUNNING(mission_script) then
-            return
-        end
+    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+    if mission_script == nil then
+        return
     end
 
     for i = 0, 5 do
@@ -375,15 +386,10 @@ menu_mission:add_button("直接完成任务 (通用)", function()
 end)
 menu_mission:add_sameline()
 menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问题)", function()
-    local mission_script = "fm_mission_controller_2020"
-    if not IS_SCRIPT_RUNNING(mission_script) then
-        mission_script = "fm_mission_controller"
-        if not IS_SCRIPT_RUNNING(mission_script) then
-            return
-        end
+    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+    if mission_script ~= nil then
+        LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
     end
-
-    LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
 end)
 
 MenuMission["DisableMissionAggroFail"] = menu_mission:add_checkbox("禁止因触发惊动而任务失败")
@@ -393,15 +399,10 @@ menu_mission:add_sameline()
 menu_mission:add_button("允许任务失败", function()
     MenuMission["DisableMissionFail"]:set_enabled(false)
 
-    local mission_script = "fm_mission_controller_2020"
-    if not IS_SCRIPT_RUNNING(mission_script) then
-        mission_script = "fm_mission_controller"
-        if not IS_SCRIPT_RUNNING(mission_script) then
-            return
-        end
+    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+    if mission_script ~= nil then
+        LOCAL_CLEAR_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
     end
-
-    LOCAL_CLEAR_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
 end)
 
 
@@ -664,27 +665,17 @@ script.register_looped("RS_Missions.Main", function()
     end
 
     if MenuMission["DisableMissionAggroFail"]:is_enabled() then
-        local mission_script = "fm_mission_controller_2020"
-        if not IS_SCRIPT_RUNNING(mission_script) then
-            mission_script = "fm_mission_controller"
-            if not IS_SCRIPT_RUNNING(mission_script) then
-                return
-            end
+        local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+        if mission_script ~= nil then
+            LOCAL_CLEAR_BITS(mission_script, Locals[mission_script].iServerBitSet1, 24, 28)
         end
-
-        LOCAL_CLEAR_BITS(mission_script, Locals[mission_script].iServerBitSet1, 24, 28)
     end
 
     if MenuMission["DisableMissionFail"]:is_enabled() then
-        local mission_script = "fm_mission_controller_2020"
-        if not IS_SCRIPT_RUNNING(mission_script) then
-            mission_script = "fm_mission_controller"
-            if not IS_SCRIPT_RUNNING(mission_script) then
-                return
-            end
+        local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+        if mission_script ~= nil then
+            LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
         end
-
-        LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
     end
 end)
 
