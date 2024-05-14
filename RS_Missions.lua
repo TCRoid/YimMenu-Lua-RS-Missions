@@ -2,7 +2,7 @@
 -- Author: Rostal
 --------------------------------
 
-local SUPPORT_GAME_VERSION <const> = "1.68-3095"
+local SUPPORT_GAME_VERSION <const> = "1.68-3179"
 
 
 --#region check game version
@@ -188,6 +188,12 @@ function GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
     return nil
 end
 
+function REQUEST_FMMC_SCRIPT_HOST(script_name)
+    if NETWORK.NETWORK_GET_HOST_OF_SCRIPT(script_name, 0, 0) ~= PLAYER.PLAYER_ID() then
+        network.force_script_host(script_name)
+    end
+end
+
 --#endregion
 
 
@@ -362,6 +368,8 @@ menu_mission:add_button("直接完成任务 (通用)", function()
         return
     end
 
+    REQUEST_FMMC_SCRIPT_HOST(mission_script)
+
     for i = 0, 5 do
         local tl23NextContentID = GLOBAL_GET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6)
         if tl23NextContentID ~= "" then
@@ -388,6 +396,7 @@ menu_mission:add_sameline()
 menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问题)", function()
     local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
     if mission_script ~= nil then
+        REQUEST_FMMC_SCRIPT_HOST(mission_script)
         LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
     end
 end)
@@ -401,6 +410,7 @@ menu_mission:add_button("允许任务失败", function()
 
     local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
     if mission_script ~= nil then
+        REQUEST_FMMC_SCRIPT_HOST(mission_script)
         LOCAL_CLEAR_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
     end
 end)
@@ -667,6 +677,7 @@ script.register_looped("RS_Missions.Main", function()
     if MenuMission["DisableMissionAggroFail"]:is_enabled() then
         local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
         if mission_script ~= nil then
+            REQUEST_FMMC_SCRIPT_HOST(mission_script)
             LOCAL_CLEAR_BITS(mission_script, Locals[mission_script].iServerBitSet1, 24, 28)
         end
     end
@@ -674,6 +685,7 @@ script.register_looped("RS_Missions.Main", function()
     if MenuMission["DisableMissionFail"]:is_enabled() then
         local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
         if mission_script ~= nil then
+            REQUEST_FMMC_SCRIPT_HOST(mission_script)
             LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
         end
     end
