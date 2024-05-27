@@ -232,12 +232,7 @@ local StrandMissionData <const> = {
     bLastMission = sStrandMissionData + 58
 }
 
--- MISSION_TO_LAUNCH_DETAILS
-local sLaunchMissionDetails <const> = 19331
-local LaunchMissionDetails <const> = {
-    iMinPlayers = sLaunchMissionDetails + 15,
-    iMissionVariation = sLaunchMissionDetails + 34
-}
+
 
 local Locals <const> = {
     ["fm_mission_controller"] = {
@@ -257,8 +252,65 @@ local Locals <const> = {
         iServerBitSet1 = 48513 + 2,
 
         iLocalBoolCheck11 = 47286
-    }
+    },
+
+    ["fm_content_security_contract"] = {
+        iGenericBitset = 7022,
+        eEndReason = 7095 + 1278
+    },
+    ["fm_content_payphone_hit"] = {
+        iMissionServerBitSet = 5639 + 740,
+        iGenericBitset = 5583,
+        eEndReason = 5639 + 683
+    },
+    ["fm_content_drug_lab_work"] = {
+        iGenericBitset = 7844,
+        eEndReason = 7845 + 1253
+    },
+    ["fm_content_stash_house"] = {
+        iGenericBitset = 3433,
+        eEndReason = 3484 + 475
+    },
+    ["fm_content_auto_shop_delivery"] = {
+        iMissionEntityBitSet = 1543 + 2 + 5,
+        iGenericBitset = 1492,
+        eEndReason = 1543 + 83
+    },
+    ["fm_content_bike_shop_delivery"] = {
+        iMissionEntityBitSet = 1545 + 2 + 5,
+        iGenericBitset = 1492,
+        eEndReason = 1543 + 83
+    },
+
 }
+
+-- MISSION_TO_LAUNCH_DETAILS
+local sLaunchMissionDetails <const> = 19331
+local LaunchMissionDetails <const> = {
+    iMinPlayers = sLaunchMissionDetails + 15,
+    iMissionVariation = sLaunchMissionDetails + 34
+}
+
+-- `freemode` Time Trial
+-- AMTT_VARS_STRUCT
+local sTTVarsStruct <const> = 14232
+local TTVarsStruct <const> = {
+    iVariation = sTTVarsStruct + 11,
+    trialTimer = sTTVarsStruct + 13,
+    iPersonalBest = sTTVarsStruct + 25,
+    eAMTT_Stage = sTTVarsStruct + 29
+}
+
+-- `freemode` RC Bandito Time Trial
+-- AMRCTT_VARS_STRUCT
+local sRCTTVarsStruct <const> = 14282
+local RCTTVarsStruct <const> = {
+    eVariation = sRCTTVarsStruct,
+    eRunStage = sRCTTVarsStruct + 2,
+    timerTrial = sRCTTVarsStruct + 6,
+    iPersonalBest = sRCTTVarsStruct + 21
+}
+
 
 
 local g_sMPTunables <const> = 262145
@@ -266,6 +318,7 @@ local Tunables <const> = {
     ["HIGH_ROCKSTAR_MISSIONS_MODIFIER"] = g_sMPTunables + 2430,
     ["LOW_ROCKSTAR_MISSIONS_MODIFIER"] = g_sMPTunables + 2434,
 }
+
 
 
 local function LAUNCH_MISSION(Data)
@@ -327,6 +380,42 @@ local function IS_PLAYER_BOSS_OF_A_GANG()
     return globals.get_int(1886967 + 1 + PLAYER.PLAYER_ID() * 609 + 10) == PLAYER.PLAYER_ID()
 end
 
+local function COMPLETE_DAILY_CHALLENGE()
+    for i = 0, 2, 1 do
+        GLOBAL_SET_INT(2359296 + 1 + 0 * 5569 + 681 + 4243 + 1 + i * 3 + 1, 1)
+    end
+end
+
+local function COMPLETE_WEEKLY_CHALLENGE()
+    local g_sWeeklyChallenge = 2737646
+
+    GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 3, 0)
+    GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 4, 0)
+
+    local target = GLOBAL_GET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 2)
+    GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 1, target)
+end
+
+local function BROADCAST_GB_BOSS_WORK_REQUEST_SERVER(iMission)
+    local user = PLAYER.PLAYER_ID()
+
+    GLOBAL_SET_INT(1886967 + 1 + user * 609 + 10 + 32, iMission)
+
+    network.trigger_script_event(1 << user, {
+        1613825825,
+        user,
+        -1,
+        iMission,
+        -1, -1, -1, -1
+    })
+end
+
+function INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    network.force_script_host(script_name)
+
+    LOCAL_SET_BIT(script_name, Locals[script_name].iGenericBitset + 1 + 0, 11)
+    LOCAL_SET_INT(script_name, Locals[script_name].eEndReason, 3)
+end
 
 --#endregion
 
@@ -346,21 +435,239 @@ menu_root:add_text("状态: " .. status_text)
 
 
 --------------------------------
+-- Menu: Freemode Mission
+--------------------------------
+
+local menu_feemode_mission <const> = menu_root:add_tab("[RSM] 自由模式任务")
+
+menu_feemode_mission:add_text("*所有功能均在单人战局测试可用*")
+
+
+menu_feemode_mission:add_text("<<  启动任务  >>")
+
+local freemode_mission_select = 0
+menu_feemode_mission:add_imgui(function()
+    freemode_mission_select, clicked = ImGui.Combo("选择自由模式任务", freemode_mission_select, {
+        "安保合约 (富兰克林)", "电话暗杀 (富兰克林)", "蠢人帮差事 (达克斯)", "赌场工作 (贝克女士)", "藏匿屋"
+    }, 5, 5)
+end)
+
+local FMMC_TYPE <const> = {
+    [0] = 263,
+    [1] = 262,
+    [2] = 307,
+    [3] = 243,
+    [4] = 308
+}
+
+menu_feemode_mission:add_button("启动 自由模式任务", function()
+    BROADCAST_GB_BOSS_WORK_REQUEST_SERVER(FMMC_TYPE[freemode_mission_select])
+end)
+
+
+menu_feemode_mission:add_separator()
+menu_feemode_mission:add_text("<<  直接完成任务  >>")
+
+menu_feemode_mission:add_button("直接完成 安保合约", function()
+    local script_name = "fm_content_security_contract"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+
+menu_feemode_mission:add_button("直接完成 电话暗杀", function()
+    local script_name = "fm_content_payphone_hit"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+menu_feemode_mission:add_sameline()
+menu_feemode_mission:add_button("直接完成 电话暗杀(暗杀奖励)", function()
+    local script_name = "fm_content_payphone_hit"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    LOCAL_SET_BIT(script_name, Locals[script_name].iMissionServerBitSet + 1, 1)
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+
+menu_feemode_mission:add_button("直接完成 蠢人帮差事", function()
+    local script_name = "fm_content_drug_lab_work"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+
+menu_feemode_mission:add_button("直接完成 藏匿屋", function()
+    local script_name = "fm_content_stash_house"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+
+menu_feemode_mission:add_button("直接完成 改装铺服务", function()
+    local script_name = "fm_content_auto_shop_delivery"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
+        TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
+    end
+
+    LOCAL_SET_BIT(script_name, Locals[script_name].iMissionEntityBitSet + 1 + 0 * 3 + 1 + 0, 4)
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+menu_feemode_mission:add_sameline()
+menu_feemode_mission:add_button("直接完成 摩托车服务", function()
+    local script_name = "fm_content_bike_shop_delivery"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+    if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
+        TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
+    end
+
+    LOCAL_SET_BIT(script_name, Locals[script_name].iMissionEntityBitSet + 1 + 0 * 3 + 1 + 0, 4)
+    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+end)
+
+
+menu_feemode_mission:add_separator()
+menu_feemode_mission:add_text("<<  时间挑战赛  >>")
+
+local TimeTrialParTime = {
+    [0] = 103200,
+    [1] = 124400,
+    [2] = 124900,
+    [3] = 46300,
+    [4] = 249500,
+    [5] = 104000,
+    [6] = 38500,
+    [7] = 70100,
+    [8] = 135000,
+    [9] = 127200,
+    [10] = 101300,
+    [11] = 77800,
+    [12] = 58800,
+    [13] = 149400,
+    [14] = 60000,
+    [15] = 79000,
+    [16] = 103400,
+    [17] = 84200,
+    [18] = 178800,
+    [19] = 86600,
+    [20] = 76600,
+    [21] = 54200,
+    [22] = 100000,
+    [23] = 125000,
+    [24] = 120000,
+    [25] = 155000,
+    [26] = 80000,
+    [27] = 144000,
+    [28] = 136000,
+    [29] = 110000,
+    [30] = 86000,
+    [31] = 130000
+}
+menu_feemode_mission:add_button("直接完成 时间挑战赛", function()
+    local script_name = "freemode"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+
+    if LOCAL_GET_INT(script_name, TTVarsStruct.eAMTT_Stage) == 3 then -- AMTT_GOTO
+        local iVariation = LOCAL_GET_INT(script_name, TTVarsStruct.iVariation)
+        local iParTime = TimeTrialParTime[iVariation]
+        if iParTime == nil then
+            iParTime = 1000 -- 1s
+        else
+            iParTime = iParTime - 1000
+        end
+        local iStartTime = NETWORK.GET_NETWORK_TIME() - iParTime
+
+        network.force_script_host(script_name)
+
+        LOCAL_SET_INT(script_name, TTVarsStruct.trialTimer, iStartTime)
+        LOCAL_SET_INT(script_name, TTVarsStruct.eAMTT_Stage, 4) -- AMTT_END
+    end
+end)
+
+menu_feemode_mission:add_sameline()
+
+local RCTimeTrialParTime = {
+    [0] = 110000,
+    [1] = 90000,
+    [2] = 80000,
+    [3] = 87000,
+    [4] = 70000,
+    [5] = 92000,
+    [6] = 125000,
+    [7] = 72000,
+    [8] = 113000,
+    [9] = 80000,
+    [10] = 83000,
+    [11] = 78000,
+    [12] = 87000,
+    [13] = 82000,
+}
+menu_feemode_mission:add_button("直接完成 RC匪徒时间挑战赛", function()
+    local script_name = "freemode"
+    if not IS_SCRIPT_RUNNING(script_name) then
+        return
+    end
+
+    if LOCAL_GET_INT(script_name, RCTTVarsStruct.eRunStage) == 4 then -- ARS_TRIAL
+        local eVariation = LOCAL_GET_INT(script_name, RCTTVarsStruct.eVariation)
+        local iParTime = RCTimeTrialParTime[eVariation]
+        if iParTime == nil then
+            iParTime = 1000 -- 1s
+        else
+            iParTime = iParTime - 1000
+        end
+        local iStartTime = NETWORK.GET_NETWORK_TIME() - iParTime
+
+        network.force_script_host(script_name)
+
+        LOCAL_SET_INT(script_name, RCTTVarsStruct.timerTrial, iStartTime)
+        LOCAL_SET_INT(script_name, RCTTVarsStruct.eRunStage, 6) -- ARS_END
+    end
+end)
+
+
+menu_feemode_mission:add_separator()
+menu_feemode_mission:add_button("完成每日挑战", function()
+    COMPLETE_DAILY_CHALLENGE()
+end)
+menu_feemode_mission:add_sameline()
+menu_feemode_mission:add_button("完成每周挑战", function()
+    COMPLETE_WEEKLY_CHALLENGE()
+end)
+
+
+
+
+
+
+--------------------------------
 -- Menu: Heist Mission
 --------------------------------
 
 local menu_mission <const> = menu_root:add_tab("[RSM] 抢劫任务")
 
-local MenuMission = {}
+local MenuHMission = {}
 
 menu_mission:add_text("*所有功能均在单人战局测试可用*")
 
 
 menu_mission:add_text("<<  通用  >>")
 
-MenuMission["SetMinPlayers"] = menu_mission:add_checkbox("最小玩家数为 1 (强制任务单人可开)")
+MenuHMission["SetMinPlayers"] = menu_mission:add_checkbox("最小玩家数为 1 (强制任务单人可开)")
 menu_mission:add_sameline()
-MenuMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
+MenuHMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
 
 menu_mission:add_button("直接完成任务 (通用)", function()
     local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
@@ -401,12 +708,12 @@ menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问�
     end
 end)
 
-MenuMission["DisableMissionAggroFail"] = menu_mission:add_checkbox("禁止因触发惊动而任务失败")
+MenuHMission["DisableMissionAggroFail"] = menu_mission:add_checkbox("禁止因触发惊动而任务失败")
 menu_mission:add_sameline()
-MenuMission["DisableMissionFail"] = menu_mission:add_checkbox("禁止任务失败")
+MenuHMission["DisableMissionFail"] = menu_mission:add_checkbox("禁止任务失败")
 menu_mission:add_sameline()
 menu_mission:add_button("允许任务失败", function()
-    MenuMission["DisableMissionFail"]:set_enabled(false)
+    MenuHMission["DisableMissionFail"]:set_enabled(false)
 
     local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
     if mission_script ~= nil then
@@ -625,12 +932,12 @@ menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施
 
 menu_mission:add_separator()
 menu_mission:add_text("<<  限制差事收入  >>")
-MenuMission["MissionEarningHigh"] = menu_mission:add_input_int("最高收入")
-MenuMission["MissionEarningLow"] = menu_mission:add_input_int("最低收入")
-MenuMission["MissionEarningModifier"] = menu_mission:add_checkbox("开启限制差事收入 (范围: 0~15000000)")
+MenuHMission["MissionEarningHigh"] = menu_mission:add_input_int("最高收入")
+MenuHMission["MissionEarningLow"] = menu_mission:add_input_int("最低收入")
+MenuHMission["MissionEarningModifier"] = menu_mission:add_checkbox("开启限制差事收入 (范围: 0~15000000)")
 menu_mission:add_sameline()
 menu_mission:add_button("取消差事收入限制", function()
-    MenuMission["MissionEarningModifier"]:set_enabled(false)
+    MenuHMission["MissionEarningModifier"]:set_enabled(false)
 
     GLOBAL_SET_FLOAT(Tunables["HIGH_ROCKSTAR_MISSIONS_MODIFIER"], 0)
     GLOBAL_SET_FLOAT(Tunables["LOW_ROCKSTAR_MISSIONS_MODIFIER"], 0)
@@ -652,7 +959,7 @@ script.register_looped("RS_Missions.Main", function()
         return false
     end
 
-    if MenuMission["SetMinPlayers"]:is_enabled() then
+    if MenuHMission["SetMinPlayers"]:is_enabled() then
         local script = "fmmc_launcher"
         if IS_SCRIPT_RUNNING(script) then
             local iArrayPos = LOCAL_GET_INT(script, LaunchMissionDetails.iMissionVariation)
@@ -669,12 +976,12 @@ script.register_looped("RS_Missions.Main", function()
         end
     end
 
-    if MenuMission["SetMaxTeams"]:is_enabled() then
+    if MenuHMission["SetMaxTeams"]:is_enabled() then
         GLOBAL_SET_INT(FMMC_STRUCT.iNumberOfTeams, 1)
         GLOBAL_SET_INT(FMMC_STRUCT.iMaxNumberOfTeams, 1)
     end
 
-    if MenuMission["DisableMissionAggroFail"]:is_enabled() then
+    if MenuHMission["DisableMissionAggroFail"]:is_enabled() then
         local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
         if mission_script ~= nil then
             REQUEST_FMMC_SCRIPT_HOST(mission_script)
@@ -682,7 +989,7 @@ script.register_looped("RS_Missions.Main", function()
         end
     end
 
-    if MenuMission["DisableMissionFail"]:is_enabled() then
+    if MenuHMission["DisableMissionFail"]:is_enabled() then
         local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
         if mission_script ~= nil then
             REQUEST_FMMC_SCRIPT_HOST(mission_script)
@@ -696,22 +1003,22 @@ script.register_looped("RS_Missions.Mission_Earning", function()
         return false
     end
 
-    local earning_max = MenuMission["MissionEarningHigh"]:get_value()
-    local earning_min = MenuMission["MissionEarningLow"]:get_value()
+    local earning_max = MenuHMission["MissionEarningHigh"]:get_value()
+    local earning_min = MenuHMission["MissionEarningLow"]:get_value()
 
     if earning_max < 0 then
-        MenuMission["MissionEarningHigh"]:set_value(0)
+        MenuHMission["MissionEarningHigh"]:set_value(0)
     elseif earning_max > 15000000 then
-        MenuMission["MissionEarningHigh"]:set_value(15000000)
+        MenuHMission["MissionEarningHigh"]:set_value(15000000)
     end
 
     if earning_min < 0 then
-        MenuMission["MissionEarningLow"]:set_value(0)
+        MenuHMission["MissionEarningLow"]:set_value(0)
     elseif earning_min > 15000000 then
-        MenuMission["MissionEarningLow"]:set_value(15000000)
+        MenuHMission["MissionEarningLow"]:set_value(15000000)
     end
 
-    if MenuMission["MissionEarningModifier"]:is_enabled() then
+    if MenuHMission["MissionEarningModifier"]:is_enabled() then
         if earning_max ~= 0 then
             GLOBAL_SET_FLOAT(Tunables["HIGH_ROCKSTAR_MISSIONS_MODIFIER"], earning_max)
         end
