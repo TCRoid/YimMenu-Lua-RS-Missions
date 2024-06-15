@@ -2,14 +2,15 @@
 -- Author: Rostal
 --------------------------------
 
-local SUPPORT_GAME_VERSION <const> = "1.68-3179"
+local SUPPORT_GAME_VERSION <const> = "3179" -- 1.68
 
 
 --#region check game version
 
-local online_version = NETWORK.GET_ONLINE_VERSION()
+-- local online_version = NETWORK.GET_ONLINE_VERSION()
 local build_version = memory.scan_pattern("8B C3 33 D2 C6 44 24 20"):add(0x24):rip()
-local CURRENT_GAME_VERSION <const> = string.format("%s-%s", online_version, build_version:get_string())
+-- local CURRENT_GAME_VERSION <const> = string.format("%s-%s", online_version, build_version:get_string())
+local CURRENT_GAME_VERSION <const> = build_version:get_string()
 
 local IS_SUPPORT = true
 if SUPPORT_GAME_VERSION ~= CURRENT_GAME_VERSION then
