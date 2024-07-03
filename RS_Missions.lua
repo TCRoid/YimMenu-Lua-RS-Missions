@@ -34,6 +34,9 @@ local function print(text)
     log.info(tostring(text))
 end
 
+local function get_label_text(label)
+    return HUD.GET_FILENAME_FOR_AUDIO_CONVERSATION(label)
+end
 
 --------------------------------
 -- Global Functions
@@ -220,6 +223,11 @@ local Globals <const> = {
     GlobalplayerBD_FM_3 = function()
         return 1887305 + 1 + PLAYER.PLAYER_ID() * 610
     end,
+
+    -- NET_HEIST_PLANNING_GENERIC_PLAYER_BD_DATA
+    GlobalPlayerBD_NetHeistPlanningGeneric = function()
+        return 1972760 + 1 + PLAYER.PLAYER_ID() * 27
+    end,
 }
 
 -- FMMC_GLOBAL_STRUCT
@@ -259,6 +267,14 @@ local StrandMissionData <const> = {
     bPassedFirstStrandNoReset = sStrandMissionData + 56,
     bIsThisAStrandMission = sStrandMissionData + 57,
     bLastMission = sStrandMissionData + 58
+}
+
+-- HEIST_ISLAND_PLAYER_BD_DATA
+local GlobalPlayerBD_HeistIsland <const> = {
+    -- HEIST_ISLAND_CONFIG
+    sConfig = function()
+        return 1973625 + 1 + PLAYER.PLAYER_ID() * 53 + 5
+    end
 }
 
 
@@ -441,6 +457,9 @@ local function LAUNCH_MISSION(Data)
     if Data.iMissionType == 274 then
         GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 13)
         GLOBAL_SET_BIT(Globals.GlobalplayerBD_FM_2() + 33, 28)
+    elseif Data.iMissionType == 260 then
+        GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 11)
+        GLOBAL_SET_BIT(Globals.GlobalplayerBD_FM_2() + 33, 27)
     elseif Data.iMissionType == 233 or Data.iMissionType == 235 then
         GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 4)
         GLOBAL_SET_BIT(Globals.GlobalplayerBD_FM_2() + 33, 12)
@@ -505,10 +524,59 @@ end
 --#endregion
 
 
+local Tables <const> = {
+    IslandHeist = {
+        ApproachVehicle = {
+            get_label_text("H4P_FIN1_SUBM_T"), -- KOSATKA
+            get_label_text("H4P_FIN1_BOMB_T"), -- ALKONOST
+            get_label_text("H4P_FIN1_SMPL_T"), -- VELUM
+            get_label_text("H4P_FIN1_SHEL_T"), -- STEALTH ANNIHILATOR
+            get_label_text("H4P_FIN1_PBOA_T"), -- PATROL BOAT
+            get_label_text("H4P_FIN1_SBOA_T")  -- LONGFIN
+        },
+        InfiltrationPoint = {
+            get_label_text("H4P_FIN2_AIRS_T"), -- AIRSTRIP
+            get_label_text("H4P_FIN2_PARA_T"), -- HALO JUMP
+            get_label_text("H4P_FIN2_WBEA_T"), -- WEST BEACH
+            get_label_text("H4P_FIN2_MDOC_T"), -- MAIN DOCK
+            get_label_text("H4P_FIN2_NDOC_T"), -- NORTH DOCK
+            get_label_text("H4P_FIN2_NDRP_T"), -- NORTH DROP ZONE
+            get_label_text("H4P_FIN2_SDRP_T"), -- SOUTH DROP ZONE
+            get_label_text("H4P_FIN2_DTUN_T")  -- DRAINAGE TUNNEL
+        },
+        CompoundEntrance = {
+            get_label_text("H4P_INT5_MGAT_T"), -- MAIN GATE
+            get_label_text("H4P_INT5_NWAL_T"), -- NORTH WALL
+            get_label_text("H4P_INT5_NSGT_T"), -- NORTH GATE
+            get_label_text("H4P_INT5_SWAL_T"), -- SOUTH WALL
+            get_label_text("H4P_INT5_SSGT_T"), -- SOUTH GATE
+            get_label_text("H4P_INT5_DTUN_T")  -- DRAINAGE TUNNEL
+        },
+        EscapePoint = {
+            get_label_text("H4P_FIN4_AIRS_T"), -- AIRSTRIP
+            get_label_text("H4P_FIN4_MDOC_T"), -- MAIN DOCK
+            get_label_text("H4P_FIN4_NDOC_T"), -- NORTH DOCK
+            get_label_text("H4P_FIN4_SUBM_T")  -- KOSATKA
+        },
+        TimeOfDay = {
+            get_label_text("H4P_FIN5_TDAY_T"), -- DAY
+            get_label_text("H4P_FIN5_TNGT_T")  -- NIGHT
+        },
+        WeaponLoadout = {
+            get_label_text("H4P_FIN6_SHOT_T"), -- AGGRESSOR
+            get_label_text("H4P_FIN6_RIFL_T"), -- CONSPIRATOR
+            get_label_text("H4P_FIN6_SNIP_T"), -- CRACK SHOT
+            get_label_text("H4P_FIN6_MKSM_T"), -- SABOTEUR
+            get_label_text("H4P_FIN6_MKAR_T")  -- MARKSMAN
+        }
+    }
+}
 
---------------------------------
+
+
+----------------------------------------
 -- Menu: Main
---------------------------------
+----------------------------------------
 
 local menu_root <const> = gui.add_tab("RS Missions")
 
@@ -519,9 +587,9 @@ menu_root:add_text("状态: " .. status_text)
 
 
 
---------------------------------
+----------------------------------------
 -- Menu: Freemode Mission
---------------------------------
+----------------------------------------
 
 local menu_feemode_mission <const> = menu_root:add_tab("[RSM] 自由模式任务")
 
@@ -604,6 +672,8 @@ menu_feemode_mission:add_button("直接完成 摩托车服务", function()
     INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
 end)
 
+menu_feemode_mission:add_text("")
+
 menu_feemode_mission:add_button("直接完成 fm_content_xx 自由模式任务", function()
     for _, item in pairs(fm_content_xxx) do
         if IS_SCRIPT_RUNNING(item.script) then
@@ -612,6 +682,7 @@ menu_feemode_mission:add_button("直接完成 fm_content_xx 自由模式任务",
         end
     end
 end)
+menu_feemode_mission:add_text("可以完成大部分的自由模式任务，但部分任务并不会判定任务成功")
 
 
 menu_feemode_mission:add_separator()
@@ -730,9 +801,9 @@ end)
 
 
 
---------------------------------
+----------------------------------------
 -- Menu: Heist Mission
---------------------------------
+----------------------------------------
 
 local menu_mission <const> = menu_root:add_tab("[RSM] 抢劫任务")
 
@@ -740,6 +811,9 @@ local MenuHMission = {}
 
 menu_mission:add_text("*所有功能均在单人战局测试可用*")
 
+--------------------------------
+-- General
+--------------------------------
 
 menu_mission:add_text("<<  通用  >>")
 
@@ -800,11 +874,15 @@ menu_mission:add_button("允许任务失败", function()
     end
 end)
 
+--------------------------------
+-- Launch Mission
+--------------------------------
 
 menu_mission:add_separator()
 menu_mission:add_text("<<  启动差事  >>")
 menu_mission:add_text("未对室内类型进行检查, 启动差事前确保在正确的室内")
 menu_mission:add_text("点击启动差事后, 耐心等待差事加载")
+
 
 menu_mission:add_button("启动差事: 别惹德瑞", function()
     if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
@@ -830,6 +908,7 @@ menu_mission:add_button("启动差事: 别惹德瑞", function()
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有事务所")
+
 
 menu_mission:add_button("启动差事: 犯罪现场 (潜行)", function()
     if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
@@ -860,6 +939,136 @@ menu_mission:add_button("启动差事: 犯罪现场 (强攻)", function()
 end)
 
 menu_mission:add_text("")
+
+
+local IslandHeistConfig = {
+    bHardModeEnabled = false,
+
+    eApproachVehicle = 6 - 1,
+    eInfiltrationPoint = 3,
+    eCompoundEntrance = 0,
+    eEscapePoint = 1,
+    eTimeOfDay = 1 - 1,
+
+    eWeaponLoadout = 1 - 1,
+    bUseSuppressors = true
+}
+menu_mission:add_button("启动差事: 佩里科岛抢劫", function()
+    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
+        return
+    end
+
+    if stats.get_int("MPX_IH_SUB_OWNED") <= 0 then
+        notify("启动差事", "你需要拥有虎鲸")
+        return
+    end
+    if not IS_PLAYER_BOSS_OF_A_GANG() then
+        notify("启动差事", "你需要注册为老大")
+        return
+    end
+    if INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) ~= 281345 then
+        notify("启动差事", "你需要在虎鲸内部")
+        return
+    end
+
+
+    local Data = {
+        iRootContentID = -1172878953, -- Tunable: H4_ROOT_CONTENT_ID_0
+        iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
+        iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
+    }
+
+    LAUNCH_MISSION(Data)
+end)
+menu_mission:add_sameline()
+menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有虎鲸; 3. 在虎鲸内部;")
+
+local menu_island_heist_config = {
+    initialized = false,
+    can_show = false
+}
+menu_mission:add_button("设置终章面板", function()
+    menu_island_heist_config.can_show = not menu_island_heist_config.can_show
+end)
+menu_mission:add_sameline()
+menu_mission:add_text("如果没有完成必须前置，需要设置终章面板后才可点击继续按钮")
+
+menu_mission:add_imgui(function()
+    if menu_island_heist_config.can_show and ImGui.Begin("佩里科岛抢劫 终章面板设置") then
+        if not menu_island_heist_config.initialized then
+            ImGui.SetWindowSize(400, 500)
+            menu_island_heist_config.initialized = true
+        end
+
+        IslandHeistConfig.bHardModeEnabled = ImGui.Checkbox(
+            get_label_text("IHB_HARD_MODE"),
+            IslandHeistConfig.bHardModeEnabled)
+
+        IslandHeistConfig.eApproachVehicle = ImGui.Combo(
+            get_label_text("H4P_FIN0_APRV_T"),
+            IslandHeistConfig.eApproachVehicle,
+            Tables.IslandHeist.ApproachVehicle, 6)
+
+        IslandHeistConfig.eInfiltrationPoint = ImGui.Combo(
+            get_label_text("H4P_INT0_ENTR_T"),
+            IslandHeistConfig.eInfiltrationPoint,
+            Tables.IslandHeist.InfiltrationPoint, 8)
+
+        IslandHeistConfig.eCompoundEntrance = ImGui.Combo(
+            get_label_text("H4P_INT0_COMP_T"),
+            IslandHeistConfig.eCompoundEntrance,
+            Tables.IslandHeist.CompoundEntrance, 6)
+
+        IslandHeistConfig.eEscapePoint = ImGui.Combo(
+            get_label_text("H4P_INT0_EXIT_T"),
+            IslandHeistConfig.eEscapePoint,
+            Tables.IslandHeist.EscapePoint, 4)
+
+        IslandHeistConfig.eTimeOfDay = ImGui.Combo(
+            get_label_text("H4P_FIN0_TIMD_T"),
+            IslandHeistConfig.eTimeOfDay,
+            Tables.IslandHeist.TimeOfDay, 2)
+
+        IslandHeistConfig.eWeaponLoadout = ImGui.Combo(
+            get_label_text("H4P_FIN0_WEAP_T"),
+            IslandHeistConfig.eWeaponLoadout,
+            Tables.IslandHeist.WeaponLoadout, 5)
+
+        IslandHeistConfig.bUseSuppressors = ImGui.Checkbox(
+            get_label_text("H4P_FIN6_SUPP_T"),
+            IslandHeistConfig.bUseSuppressors)
+
+
+        if ImGui.Button("设置终章面板", 200, 50) then
+            local sConfig = GlobalPlayerBD_HeistIsland.sConfig()
+            local Data = IslandHeistConfig
+
+            GLOBAL_SET_INT(sConfig + 35, Data.eWeaponLoadout + 1)
+            GLOBAL_SET_BOOL(sConfig + 38, Data.bHardModeEnabled)
+            if Data.bHardModeEnabled then
+                GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 2)
+            else
+                GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 1)
+            end
+            GLOBAL_SET_INT(sConfig + 39, Data.eApproachVehicle + 1)
+            GLOBAL_SET_INT(sConfig + 40, Data.eInfiltrationPoint)
+            GLOBAL_SET_INT(sConfig + 41, Data.eCompoundEntrance)
+            GLOBAL_SET_INT(sConfig + 42, Data.eEscapePoint)
+            GLOBAL_SET_INT(sConfig + 43, Data.eTimeOfDay + 1)
+            GLOBAL_SET_BOOL(sConfig + 44, Data.bUseSuppressors)
+        end
+
+        if ImGui.Button("强制点击 继续 按钮", 200, 50) then
+            GLOBAL_SET_INT(Globals.GlobalPlayerBD_NetHeistPlanningGeneric() + 18 + 1, 1)
+            GLOBAL_SET_INT(Globals.GlobalPlayerBD_NetHeistPlanningGeneric() + 18, 0)
+        end
+
+        ImGui.End()
+    end
+end)
+
+menu_mission:add_text("")
+
 
 local auto_shop_final_select = 0
 menu_mission:add_imgui(function()
@@ -910,6 +1119,7 @@ menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有改装铺; 3. 在改
 
 menu_mission:add_text("")
 
+
 local doomsday_heist_final_select = 0
 menu_mission:add_imgui(function()
     doomsday_heist_final_select, clicked = ImGui.Combo("选择末日豪劫终章", doomsday_heist_final_select, {
@@ -952,6 +1162,7 @@ menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
 
 menu_mission:add_text("")
+
 
 local doomsday_heist_setup_select = 0
 menu_mission:add_imgui(function()
@@ -1006,6 +1217,7 @@ menu_mission:add_button("启动差事: 末日豪劫 准备任务", function()
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
+
 
 
 menu_mission:add_separator()
