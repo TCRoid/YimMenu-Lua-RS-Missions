@@ -167,7 +167,7 @@ function CLEAR_BITS(int, ...)
 end
 
 --------------------------------
--- Misc Functions
+-- Script Functions
 --------------------------------
 
 function IS_SCRIPT_RUNNING(script_name)
@@ -196,6 +196,14 @@ function REQUEST_FMMC_SCRIPT_HOST(script_name)
     if NETWORK.NETWORK_GET_HOST_OF_SCRIPT(script_name, 0, 0) ~= PLAYER.PLAYER_ID() then
         network.force_script_host(script_name)
     end
+end
+
+--------------------------------
+-- Online Functions
+--------------------------------
+
+function IS_IN_SESSION()
+    return NETWORK.NETWORK_IS_SESSION_STARTED() and not IS_SCRIPT_RUNNING("maintransition")
 end
 
 --#endregion
@@ -274,6 +282,13 @@ local GlobalPlayerBD_HeistIsland <const> = {
     -- HEIST_ISLAND_CONFIG
     sConfig = function()
         return 1973625 + 1 + PLAYER.PLAYER_ID() * 53 + 5
+    end
+}
+
+-- NET_HEIST_PLANNING_GENERIC_PLAYER_BD_DATA
+local GlobalPlayerBD_NetHeistPlanningGeneric <const> = {
+    stFinaleLaunchTimer = function()
+        return Globals.GlobalPlayerBD_NetHeistPlanningGeneric() + 18
     end
 }
 
@@ -426,8 +441,18 @@ local fm_content_xxx = {
 
 local g_sMPTunables <const> = 262145
 local Tunables <const> = {
-    ["HIGH_ROCKSTAR_MISSIONS_MODIFIER"] = g_sMPTunables + 2403,
-    ["LOW_ROCKSTAR_MISSIONS_MODIFIER"] = g_sMPTunables + 2407,
+    ["HIGH_ROCKSTAR_MISSIONS_MODIFIER"]                 = g_sMPTunables + 2403,
+    ["LOW_ROCKSTAR_MISSIONS_MODIFIER"]                  = g_sMPTunables + 2407,
+
+    ["IH_PRIMARY_TARGET_VALUE_TEQUILA"]                 = g_sMPTunables + 29458,
+    ["IH_PRIMARY_TARGET_VALUE_PEARL_NECKLACE"]          = g_sMPTunables + 29459,
+    ["IH_PRIMARY_TARGET_VALUE_BEARER_BONDS"]            = g_sMPTunables + 29460,
+    ["IH_PRIMARY_TARGET_VALUE_PINK_DIAMOND"]            = g_sMPTunables + 29461,
+    ["IH_PRIMARY_TARGET_VALUE_MADRAZO_FILES"]           = g_sMPTunables + 29462,
+    ["IH_PRIMARY_TARGET_VALUE_SAPPHIRE_PANTHER_STATUE"] = g_sMPTunables + 29463,
+
+    ["IH_DEDUCTION_FENCING_FEE"]                        = g_sMPTunables + 29467,
+    ["IH_DEDUCTION_PAVEL_CUT"]                          = g_sMPTunables + 29468,
 }
 
 
@@ -514,11 +539,42 @@ local function BROADCAST_GB_BOSS_WORK_REQUEST_SERVER(iMission)
     })
 end
 
-function INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+local function INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
     network.force_script_host(script_name)
 
     LOCAL_SET_BIT(script_name, Locals[script_name].iGenericBitset + 1 + 0, 11)
     LOCAL_SET_INT(script_name, Locals[script_name].eEndReason, 3)
+end
+
+local function INSTANT_FINISH_FM_MISSION_CONTROLLER()
+    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+    if mission_script == nil then
+        return
+    end
+
+    REQUEST_FMMC_SCRIPT_HOST(mission_script)
+
+    for i = 0, 5 do
+        local tl23NextContentID = GLOBAL_GET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6)
+        if tl23NextContentID ~= "" then
+            GLOBAL_SET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6, "")
+        end
+    end
+
+    if GLOBAL_GET_BOOL(StrandMissionData.bIsThisAStrandMission) then
+        GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstMission, true)
+        GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstStrandNoReset, true)
+        GLOBAL_SET_BOOL(StrandMissionData.bLastMission, true)
+    end
+    LOCAL_SET_INT(mission_script, Locals[mission_script].iNextMission, 5)
+
+    LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
+
+    for i = 0, 3 do
+        LOCAL_SET_INT(mission_script, Locals[mission_script].iTeamScore + i, 999999)
+    end
+
+    LOCAL_SET_BITS(mission_script, Locals[mission_script].iServerBitSet, 9, 10, 11, 12, 16)
 end
 
 --#endregion
@@ -822,34 +878,7 @@ menu_mission:add_sameline()
 MenuHMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
 
 menu_mission:add_button("直接完成任务 (通用)", function()
-    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
-    if mission_script == nil then
-        return
-    end
-
-    REQUEST_FMMC_SCRIPT_HOST(mission_script)
-
-    for i = 0, 5 do
-        local tl23NextContentID = GLOBAL_GET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6)
-        if tl23NextContentID ~= "" then
-            GLOBAL_SET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6, "")
-        end
-    end
-
-    if GLOBAL_GET_BOOL(StrandMissionData.bIsThisAStrandMission) then
-        GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstMission, true)
-        GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstStrandNoReset, true)
-        GLOBAL_SET_BOOL(StrandMissionData.bLastMission, true)
-    end
-    LOCAL_SET_INT(mission_script, Locals[mission_script].iNextMission, 5)
-
-    LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
-
-    for i = 0, 3 do
-        LOCAL_SET_INT(mission_script, Locals[mission_script].iTeamScore + i, 999999)
-    end
-
-    LOCAL_SET_BITS(mission_script, Locals[mission_script].iServerBitSet, 9, 10, 11, 12, 16)
+    INSTANT_FINISH_FM_MISSION_CONTROLLER()
 end)
 menu_mission:add_sameline()
 menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问题)", function()
@@ -1059,8 +1088,8 @@ menu_mission:add_imgui(function()
         end
 
         if ImGui.Button("强制点击 继续 按钮", 200, 50) then
-            GLOBAL_SET_INT(Globals.GlobalPlayerBD_NetHeistPlanningGeneric() + 18 + 1, 1)
-            GLOBAL_SET_INT(Globals.GlobalPlayerBD_NetHeistPlanningGeneric() + 18, 0)
+            GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer() + 1, 1)
+            GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer(), 0)
         end
 
         ImGui.End()
@@ -1224,7 +1253,7 @@ menu_mission:add_separator()
 menu_mission:add_text("<<  限制差事收入  >>")
 MenuHMission["MissionEarningHigh"] = menu_mission:add_input_int("最高收入")
 MenuHMission["MissionEarningLow"] = menu_mission:add_input_int("最低收入")
-MenuHMission["MissionEarningModifier"] = menu_mission:add_checkbox("开启限制差事收入 (范围: 0~15000000)")
+MenuHMission["MissionEarningModifier"] = menu_mission:add_checkbox("开启限制差事收入 [0 ~ 15000000]")
 menu_mission:add_sameline()
 menu_mission:add_button("取消差事收入限制", function()
     MenuHMission["MissionEarningModifier"]:set_enabled(false)
@@ -1240,15 +1269,324 @@ menu_mission:add_text("数值为0, 则不进行限制; 限制最低收入后, �
 
 
 
+
+
+
+----------------------------------------
+-- Menu: Automation
+----------------------------------------
+
+local menu_automation <const> = menu_root:add_tab("[RSM] 自动化任务")
+
+local MenuMMoney = {}
+
+
+--------------------------------
+-- Auto Island Heist
+--------------------------------
+
+menu_automation:add_text("<<  全自动佩里科岛抢劫  >>")
+
+menu_automation:add_text("*仅适用于单人*")
+menu_automation:add_text("要求: 1.注册为老大; 2.在虎鲸内部; 3.开启后无需任何操作，只需等待任务结束")
+
+menu_automation:add_button("设置偏好出生地点为 虎鲸", function()
+    stats.set_int("MPX_SPAWN_LOCATION_SETTING", 16)
+end)
+menu_automation:add_sameline()
+menu_automation:add_text("然后切换战局即可")
+
+
+local bTransitionSessionSkipLbAndNjvs = g_sTransitionSessionData + 702
+
+local _coronaMenuData = 17445
+local coronaMenuData = {
+    iCurrentSelection = _coronaMenuData + 911,
+}
+
+local _sLaunchMissionDetails = 19709
+local sLaunchMissionDetails2 = {
+    iIntroStatus = _sLaunchMissionDetails,
+    iHeistStatus = _sLaunchMissionDetails + 3,
+    iLobbyStatus = _sLaunchMissionDetails + 4,
+    iInviteScreenStatus = _sLaunchMissionDetails + 6,
+    iInCoronaStatus = _sLaunchMissionDetails + 7,
+    iBettingStatus = _sLaunchMissionDetails + 10,
+    iLoadStatus = _sLaunchMissionDetails + 11,
+
+    iMaxParticipants = _sLaunchMissionDetails + 32,
+}
+
+
+local AutoIslandHeistStatus <const> = {
+    Disable = 0,
+    Freemode = 1,
+    InKotsatka = 2,
+    RegisterAsCEO = 3,
+    IntroScreen = 4,
+    HeistPlanningScreen = 5,
+    InCoronaScreen = 6,
+    InMission = 7,
+    MissionEnd = 8,
+    Cleanup = 9
+}
+
+
+local AutoIslandHeist = {
+    button = 0,
+    enable = false,
+    status = AutoIslandHeistStatus.Disable,
+
+    menu = {},
+    setting = {
+        rewardValue = 2000000,
+        addRandom = true,
+        disableCut = false,
+        delay = 1500
+    }
+}
+
+function AutoIslandHeist.setStatus(eStatus)
+    AutoIslandHeist.status = eStatus
+end
+
+function AutoIslandHeist.toggleButtonName(toggle)
+    if toggle then
+        AutoIslandHeist.button:set_text("开启 全自动佩里科岛抢劫")
+    else
+        AutoIslandHeist.button:set_text("停止 全自动佩里科岛抢劫")
+    end
+end
+
+function AutoIslandHeist.checkInputValue(input_value, min_value, max_value)
+    if input_value < min_value then
+        return false
+    end
+    if input_value > max_value then
+        return false
+    end
+    return true
+end
+
+function AutoIslandHeist.cleanup()
+    AutoIslandHeist.enable = false
+    AutoIslandHeist.status = AutoIslandHeistStatus.Disable
+    AutoIslandHeist.toggleButtonName(true)
+end
+
+function AutoIslandHeist.notify(text)
+    notify("全自动佩里科岛抢劫", text)
+end
+
+AutoIslandHeist.menu.rewardValue = menu_automation:add_input_int("主要目标价值 [0 ~ 2550000] (0: 默认价值)")
+AutoIslandHeist.menu.rewardValue:set_value(AutoIslandHeist.setting.rewardValue)
+
+AutoIslandHeist.menu.addRandom = menu_automation:add_checkbox("添加随机数 (主要目标价值加上 0~50000 的随机数)")
+AutoIslandHeist.menu.addRandom:set_enabled(AutoIslandHeist.setting.addRandom)
+menu_automation:add_sameline()
+AutoIslandHeist.menu.disableCut = menu_automation:add_checkbox("禁用NPC分红")
+AutoIslandHeist.menu.disableCut:set_enabled(AutoIslandHeist.setting.disableCut)
+
+AutoIslandHeist.menu.delay = menu_automation:add_input_int("延迟 [0 ~ 5000] (毫秒, 到达新的状态后的等待时间)")
+AutoIslandHeist.menu.delay:set_value(AutoIslandHeist.setting.delay)
+
+
+AutoIslandHeist.button = menu_automation:add_button("开启 全自动佩里科岛抢劫", function()
+    if AutoIslandHeist.enable then
+        AutoIslandHeist.enable = false
+        return
+    end
+
+    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
+        return
+    end
+    if stats.get_int("MPX_IH_SUB_OWNED") <= 0 then
+        AutoIslandHeist.notify("你需要拥有虎鲸")
+        return
+    end
+    if not IS_PLAYER_BOSS_OF_A_GANG() then
+        AutoIslandHeist.notify("你需要注册为老大")
+        return
+    end
+    if INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) ~= 281345 then
+        AutoIslandHeist.notify("你需要在虎鲸内部")
+        return
+    end
+
+    AutoIslandHeist.setting.rewardValue = AutoIslandHeist.menu.rewardValue:get_value()
+    if not AutoIslandHeist.checkInputValue(AutoIslandHeist.setting.rewardValue, 0, 2550000) then
+        AutoIslandHeist.setting.rewardValue = 2000000
+    end
+    AutoIslandHeist.setting.addRandom = AutoIslandHeist.menu.addRandom:is_enabled()
+    AutoIslandHeist.setting.disableCut = AutoIslandHeist.menu.disableCut:is_enabled()
+    AutoIslandHeist.setting.delay = AutoIslandHeist.menu.delay:get_value()
+    if not AutoIslandHeist.checkInputValue(AutoIslandHeist.setting.delay, 0, 5000) then
+        AutoIslandHeist.setting.delay = 1500
+    end
+
+    -- Add random value
+    if AutoIslandHeist.setting.addRandom then
+        AutoIslandHeist.setting.rewardValue = AutoIslandHeist.setting.rewardValue +
+            math.random(0, 50000)
+    end
+
+    -- Calculate estimated reward value
+    local estimatedValue = AutoIslandHeist.setting.rewardValue
+    if not AutoIslandHeist.setting.disableCut then
+        estimatedValue = math.ceil(estimatedValue * 0.88)
+    end
+    AutoIslandHeist.notify("预计收入: " .. estimatedValue)
+
+
+    AutoIslandHeist.toggleButtonName(false)
+    AutoIslandHeist.enable = true
+    AutoIslandHeist.setStatus(AutoIslandHeistStatus.InKotsatka)
+end)
+
+
+script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
+    if AutoIslandHeist.status == AutoIslandHeistStatus.Disable then
+        return
+    end
+
+    if not AutoIslandHeist.enable then
+        AutoIslandHeist.cleanup()
+        AutoIslandHeist.notify("已停止...")
+        return
+    end
+
+    local setting = AutoIslandHeist.setting
+    local eStatus = AutoIslandHeist.status
+
+    if eStatus == AutoIslandHeistStatus.InKotsatka then
+        if IS_IN_SESSION() then
+            script_util:sleep(setting.delay)
+
+            local Data = {
+                iRootContentID = -1172878953, -- HIM_STUB
+                iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
+                iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
+            }
+            LAUNCH_MISSION(Data)
+
+            AutoIslandHeist.notify("启动差事...")
+            AutoIslandHeist.setStatus(AutoIslandHeistStatus.IntroScreen)
+        end
+    elseif eStatus == AutoIslandHeistStatus.IntroScreen then
+        local script_name = "fmmc_launcher"
+        if IS_SCRIPT_RUNNING(script_name) then
+            if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iIntroStatus) == 3 then
+                script_util:sleep(setting.delay)
+
+                LOCAL_SET_INT(script_name, sLaunchMissionDetails2.iMaxParticipants, 1)
+
+                AutoIslandHeist.notify("开始游戏...")
+                AutoIslandHeist.setStatus(AutoIslandHeistStatus.HeistPlanningScreen)
+            end
+        end
+    elseif eStatus == AutoIslandHeistStatus.HeistPlanningScreen then
+        if IS_SCRIPT_RUNNING("heist_island_planning") then
+            local script_name = "fmmc_launcher"
+            if IS_SCRIPT_RUNNING(script_name) then
+                if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iLoadStatus) == 2 then
+                    script_util:sleep(setting.delay)
+
+
+                    local sConfig = GlobalPlayerBD_HeistIsland.sConfig()
+
+                    local Data = {
+                        bHardModeEnabled = false,
+                        eApproachVehicle = 6,
+                        eInfiltrationPoint = 3,
+                        eCompoundEntrance = 0,
+                        eEscapePoint = 1,
+                        eTimeOfDay = 1,
+                        eWeaponLoadout = 1,
+                        bUseSuppressors = true
+                    }
+                    GLOBAL_SET_INT(sConfig + 35, Data.eWeaponLoadout)
+                    GLOBAL_SET_BOOL(sConfig + 38, Data.bHardModeEnabled)
+                    GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 1)
+
+                    GLOBAL_SET_INT(sConfig + 39, Data.eApproachVehicle)
+                    GLOBAL_SET_INT(sConfig + 40, Data.eInfiltrationPoint)
+                    GLOBAL_SET_INT(sConfig + 41, Data.eCompoundEntrance)
+                    GLOBAL_SET_INT(sConfig + 42, Data.eEscapePoint)
+                    GLOBAL_SET_INT(sConfig + 43, Data.eTimeOfDay)
+                    GLOBAL_SET_BOOL(sConfig + 44, Data.bUseSuppressors)
+
+                    GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer() + 1, 1)
+                    GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer(), 0)
+
+                    AutoIslandHeist.notify("设置面板并继续...")
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.InCoronaScreen)
+                end
+            end
+        end
+    elseif eStatus == AutoIslandHeistStatus.InCoronaScreen then
+        if IS_SCRIPT_RUNNING("heist_island_planning") then
+            local script_name = "fmmc_launcher"
+            if IS_SCRIPT_RUNNING(script_name) then
+                if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iInCoronaStatus) == 4 then
+                    script_util:sleep(setting.delay)
+
+                    LOCAL_SET_INT(script_name, coronaMenuData.iCurrentSelection, 14)
+                    -- FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT
+                    PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
+
+                    AutoIslandHeist.notify("准备就绪，进入任务...")
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.InMission)
+                end
+            end
+        end
+    elseif eStatus == AutoIslandHeistStatus.InMission then
+        if IS_IN_SESSION() then
+            if IS_SCRIPT_RUNNING("fm_mission_controller_2020") then
+                script_util:sleep(setting.delay + 3000)
+
+                if setting.rewardValue > 0 then
+                    local rewardValue = setting.rewardValue
+                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_TEQUILA"], rewardValue)
+                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_PEARL_NECKLACE"], rewardValue)
+                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_BEARER_BONDS"], rewardValue)
+                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_PINK_DIAMOND"], rewardValue)
+                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_MADRAZO_FILES"], rewardValue)
+                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_SAPPHIRE_PANTHER_STATUE"], rewardValue)
+                end
+                if setting.disableCut then
+                    GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_FENCING_FEE"], 0)
+                    GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_PAVEL_CUT"], 0)
+                end
+                INSTANT_FINISH_FM_MISSION_CONTROLLER()
+
+                GLOBAL_SET_BOOL(bTransitionSessionSkipLbAndNjvs, true)
+
+                AutoIslandHeist.notify("直接完成任务...")
+                AutoIslandHeist.setStatus(AutoIslandHeistStatus.MissionEnd)
+            end
+        end
+    elseif eStatus == AutoIslandHeistStatus.MissionEnd then
+        if not IS_SCRIPT_RUNNING("fm_mission_controller_2020") then
+            AutoIslandHeist.notify("任务已完成...")
+            AutoIslandHeist.setStatus(AutoIslandHeistStatus.Cleanup)
+        end
+    elseif eStatus == AutoIslandHeistStatus.Cleanup then
+        AutoIslandHeist.cleanup()
+        AutoIslandHeist.notify("结束...")
+        return false
+    end
+end)
+
+
+
+
+
+
 --------------------------------
 -- Loop Script
 --------------------------------
 
 script.register_looped("RS_Missions.Main", function()
-    if not IS_SUPPORT then
-        return false
-    end
-
     if MenuHMission["SetMinPlayers"]:is_enabled() then
         local script = "fmmc_launcher"
         if IS_SCRIPT_RUNNING(script) then
@@ -1289,10 +1627,6 @@ script.register_looped("RS_Missions.Main", function()
 end)
 
 script.register_looped("RS_Missions.Mission_Earning", function()
-    if not IS_SUPPORT then
-        return false
-    end
-
     local earning_max = MenuHMission["MissionEarningHigh"]:get_value()
     local earning_min = MenuHMission["MissionEarningLow"]:get_value()
 
@@ -1317,8 +1651,3 @@ script.register_looped("RS_Missions.Mission_Earning", function()
         end
     end
 end)
-
-
-if not IS_SUPPORT then
-    menu_mission:clear()
-end
