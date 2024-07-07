@@ -1288,13 +1288,13 @@ local MenuMMoney = {}
 menu_automation:add_text("<<  全自动佩里科岛抢劫  >>")
 
 menu_automation:add_text("*仅适用于单人*")
-menu_automation:add_text("要求: 1.注册为老大; 2.在虎鲸内部; 3.开启后无需任何操作，只需等待任务结束")
+menu_automation:add_text("要求: 1. 开启后无需任何操作，只需等待任务结束; 2. 自动注册CEO可能会有问题，可以提前注册")
 
-menu_automation:add_button("设置偏好出生地点为 虎鲸", function()
-    stats.set_int("MPX_SPAWN_LOCATION_SETTING", 16)
-end)
-menu_automation:add_sameline()
-menu_automation:add_text("然后切换战局即可")
+-- menu_automation:add_button("设置偏好出生地点为 虎鲸", function()
+--     stats.set_int("MPX_SPAWN_LOCATION_SETTING", 16)
+-- end)
+-- menu_automation:add_sameline()
+-- menu_automation:add_text("然后切换战局即可")
 
 
 local bTransitionSessionSkipLbAndNjvs = g_sTransitionSessionData + 702
@@ -1317,6 +1317,99 @@ local sLaunchMissionDetails2 = {
     iMaxParticipants = _sLaunchMissionDetails + 32,
 }
 
+local function REGISTER_AS_A_CEO()
+    script.run_in_fiber(function(script_util)
+        local ePiStage = 1526
+
+        local g_iPIM_SubMenu = 2710428
+        local PIMenuData = {
+            iCurrentSelection = 2710523 + 8191
+        }
+        local g_bPIM_ResetMenuNow = 2710431
+
+
+        local script_name = "am_pi_menu"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+
+        repeat
+            script_util:yield(10)
+            -- PLAYER_CONTROL, INPUT_INTERACTION_MENU
+            PAD.SET_CONTROL_VALUE_NEXT_FRAME(0, 244, 1.0)
+        until LOCAL_GET_INT(script_name, ePiStage) == 1
+
+        GLOBAL_SET_INT(g_iPIM_SubMenu, 116) -- REGISTER AS A BOSS
+        GLOBAL_SET_INT(PIMenuData.iCurrentSelection, 0)
+
+        GLOBAL_SET_BOOL(g_bPIM_ResetMenuNow, true)
+
+        script_util:sleep(50)
+
+        -- FRONTEND_CONTROL, INPUT_CELLPHONE_SELECT
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 176, 1.0)
+
+        repeat
+            script_util:yield()
+        until GLOBAL_GET_INT(g_iPIM_SubMenu) == 27 -- Start an Organization
+        GLOBAL_SET_INT(PIMenuData.iCurrentSelection, 0)
+
+        script_util:sleep(10)
+
+        -- FRONTEND_CONTROL, INPUT_CELLPHONE_SELECT
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 176, 1.0)
+
+        script_util:sleep(10)
+
+        -- FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
+
+        script_util:sleep(10)
+
+        if LOCAL_GET_INT(script_name, ePiStage) == 1 then
+            -- PLAYER_CONTROL, INPUT_INTERACTION_MENU
+            PAD.SET_CONTROL_VALUE_NEXT_FRAME(0, 244, 1.0)
+        end
+    end)
+end
+
+local function JOIN_INVITE_ONLY_SESSION()
+    script.run_in_fiber(function(script_util)
+        local g_Private_Players_FM_SESSION_Menu_Choice = 1575035
+        local g_PauseMenuMissionCreatorData = {
+            iBS_PauseMenuFlags = 1574589
+        }
+
+        -- FM_SESSION_MENU_CHOICE_JOIN_CLOSED_INVITE_ONLY
+        GLOBAL_SET_INT(g_Private_Players_FM_SESSION_Menu_Choice, 11)
+
+        -- bsPauseRequestingTransition, bsPauseMenuRequestingNewSession
+        GLOBAL_SET_BITS(g_PauseMenuMissionCreatorData.iBS_PauseMenuFlags, 0, 5)
+
+        script_util:sleep(200)
+
+        GLOBAL_SET_INT(g_PauseMenuMissionCreatorData.iBS_PauseMenuFlags, 0)
+    end)
+end
+
+local function IS_PLAYER_IN_KOSATKA()
+    return INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) == 281345
+end
+
+local function getInputValue(input, min_value, max_value)
+    local input_value = input:get_value()
+
+    if input_value < min_value then
+        input_value = min_value
+    elseif input_value > max_value then
+        input_value = max_value
+    end
+
+    input:set_value(input_value)
+    return input_value
+end
+
+
 
 local AutoIslandHeistStatus <const> = {
     Disable = 0,
@@ -1336,6 +1429,7 @@ local AutoIslandHeist = {
     button = 0,
     enable = false,
     status = AutoIslandHeistStatus.Disable,
+    spawnLocation = nil,
 
     menu = {},
     setting = {
@@ -1350,6 +1444,14 @@ function AutoIslandHeist.setStatus(eStatus)
     AutoIslandHeist.status = eStatus
 end
 
+function AutoIslandHeist.getSpawnLocation()
+    return stats.get_int("MPX_SPAWN_LOCATION_SETTING")
+end
+
+function AutoIslandHeist.setSpawnLocation(iLocation)
+    stats.set_int("MPX_SPAWN_LOCATION_SETTING", iLocation)
+end
+
 function AutoIslandHeist.toggleButtonName(toggle)
     if toggle then
         AutoIslandHeist.button:set_text("开启 全自动佩里科岛抢劫")
@@ -1358,17 +1460,11 @@ function AutoIslandHeist.toggleButtonName(toggle)
     end
 end
 
-function AutoIslandHeist.checkInputValue(input_value, min_value, max_value)
-    if input_value < min_value then
-        return false
-    end
-    if input_value > max_value then
-        return false
-    end
-    return true
-end
-
 function AutoIslandHeist.cleanup()
+    if AutoIslandHeist.spawnLocation then
+        AutoIslandHeist.setSpawnLocation(AutoIslandHeist.spawnLocation)
+    end
+
     AutoIslandHeist.enable = false
     AutoIslandHeist.status = AutoIslandHeistStatus.Disable
     AutoIslandHeist.toggleButtonName(true)
@@ -1404,43 +1500,34 @@ AutoIslandHeist.button = menu_automation:add_button("开启 全自动佩里科�
         AutoIslandHeist.notify("你需要拥有虎鲸")
         return
     end
-    if not IS_PLAYER_BOSS_OF_A_GANG() then
-        AutoIslandHeist.notify("你需要注册为老大")
-        return
-    end
-    if INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) ~= 281345 then
-        AutoIslandHeist.notify("你需要在虎鲸内部")
-        return
-    end
 
-    AutoIslandHeist.setting.rewardValue = AutoIslandHeist.menu.rewardValue:get_value()
-    if not AutoIslandHeist.checkInputValue(AutoIslandHeist.setting.rewardValue, 0, 2550000) then
-        AutoIslandHeist.setting.rewardValue = 2000000
-    end
+    AutoIslandHeist.setting.rewardValue = getInputValue(AutoIslandHeist.menu.rewardValue, 0, 2550000)
     AutoIslandHeist.setting.addRandom = AutoIslandHeist.menu.addRandom:is_enabled()
     AutoIslandHeist.setting.disableCut = AutoIslandHeist.menu.disableCut:is_enabled()
-    AutoIslandHeist.setting.delay = AutoIslandHeist.menu.delay:get_value()
-    if not AutoIslandHeist.checkInputValue(AutoIslandHeist.setting.delay, 0, 5000) then
-        AutoIslandHeist.setting.delay = 1500
-    end
+    AutoIslandHeist.setting.delay = getInputValue(AutoIslandHeist.menu.delay, 0, 5000)
 
-    -- Add random value
-    if AutoIslandHeist.setting.addRandom then
-        AutoIslandHeist.setting.rewardValue = AutoIslandHeist.setting.rewardValue +
-            math.random(0, 50000)
-    end
+    
+    if AutoIslandHeist.setting.rewardValue > 0 then
+        -- Add random value
+        if AutoIslandHeist.setting.addRandom then
+            AutoIslandHeist.setting.rewardValue = AutoIslandHeist.setting.rewardValue +
+                math.random(0, 50000)
+        end
 
-    -- Calculate estimated reward value
-    local estimatedValue = AutoIslandHeist.setting.rewardValue
-    if not AutoIslandHeist.setting.disableCut then
-        estimatedValue = math.ceil(estimatedValue * 0.88)
+        -- Calculate estimated reward value
+        local estimatedValue = AutoIslandHeist.setting.rewardValue
+        if not AutoIslandHeist.setting.disableCut then
+            estimatedValue = math.ceil(estimatedValue * 0.88)
+        end
+        AutoIslandHeist.notify("预计收入: " .. estimatedValue)
     end
-    AutoIslandHeist.notify("预计收入: " .. estimatedValue)
 
 
     AutoIslandHeist.toggleButtonName(false)
     AutoIslandHeist.enable = true
-    AutoIslandHeist.setStatus(AutoIslandHeistStatus.InKotsatka)
+    AutoIslandHeist.spawnLocation = nil
+
+    AutoIslandHeist.setStatus(AutoIslandHeistStatus.Freemode)
 end)
 
 
@@ -1458,23 +1545,48 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
     local setting = AutoIslandHeist.setting
     local eStatus = AutoIslandHeist.status
 
-    if eStatus == AutoIslandHeistStatus.InKotsatka then
+    if eStatus == AutoIslandHeistStatus.Freemode then
+        if not IS_PLAYER_IN_KOSATKA() then
+            AutoIslandHeist.spawnLocation = AutoIslandHeist.getSpawnLocation()
+            AutoIslandHeist.setSpawnLocation(16) -- MP_SETTING_SPAWN_SUBMARINE
+            JOIN_INVITE_ONLY_SESSION()
+
+            AutoIslandHeist.notify("切换战局到虎鲸...")
+        end
+        AutoIslandHeist.setStatus(AutoIslandHeistStatus.InKotsatka)
+    elseif eStatus == AutoIslandHeistStatus.InKotsatka then
         if IS_IN_SESSION() then
+            if IS_PLAYER_IN_KOSATKA() then
+                script_util:sleep(setting.delay)
+
+                if not IS_PLAYER_BOSS_OF_A_GANG() then
+                    REGISTER_AS_A_CEO()
+
+                    AutoIslandHeist.notify("注册为CEO...")
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.RegisterAsCEO)
+                else
+                    local Data = {
+                        iRootContentID = -1172878953, -- HIM_STUB
+                        iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
+                        iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
+                    }
+                    LAUNCH_MISSION(Data)
+
+                    AutoIslandHeist.notify("启动差事...")
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.IntroScreen)
+                end
+            end
+        end
+    elseif eStatus == AutoIslandHeistStatus.RegisterAsCEO then
+        if IS_PLAYER_BOSS_OF_A_GANG() then
             script_util:sleep(setting.delay)
 
-            local Data = {
-                iRootContentID = -1172878953, -- HIM_STUB
-                iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
-                iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
-            }
-            LAUNCH_MISSION(Data)
-
-            AutoIslandHeist.notify("启动差事...")
-            AutoIslandHeist.setStatus(AutoIslandHeistStatus.IntroScreen)
+            AutoIslandHeist.setStatus(AutoIslandHeistStatus.InKotsatka)
         end
     elseif eStatus == AutoIslandHeistStatus.IntroScreen then
         local script_name = "fmmc_launcher"
         if IS_SCRIPT_RUNNING(script_name) then
+            -- FM_MISSION_INTRO_SCREEN_MAINTAIN
             if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iIntroStatus) == 3 then
                 script_util:sleep(setting.delay)
 
@@ -1488,6 +1600,7 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
         if IS_SCRIPT_RUNNING("heist_island_planning") then
             local script_name = "fmmc_launcher"
             if IS_SCRIPT_RUNNING(script_name) then
+                -- FM_MISSION_LOAD_IN_CORONA_SCENE_COMPLETE
                 if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iLoadStatus) == 2 then
                     script_util:sleep(setting.delay)
 
@@ -1527,10 +1640,13 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
         if IS_SCRIPT_RUNNING("heist_island_planning") then
             local script_name = "fmmc_launcher"
             if IS_SCRIPT_RUNNING(script_name) then
+                -- FM_MISSION_IN_CORONA_SCREEN_MAINTAIN
                 if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iInCoronaStatus) == 4 then
                     script_util:sleep(setting.delay)
 
+                    -- ciCORONA_LOBBY_START_GAME
                     LOCAL_SET_INT(script_name, coronaMenuData.iCurrentSelection, 14)
+
                     -- FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT
                     PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
 
