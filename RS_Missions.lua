@@ -277,6 +277,12 @@ local StrandMissionData <const> = {
     bLastMission = sStrandMissionData + 58
 }
 
+-- HEIST_CLIENT_PLANNING_LOCAL_DATA
+local _g_HeistPlanningClient <const> = 1930926
+local g_HeistPlanningClient <const> = {
+    bHeistCoronaActive = _g_HeistPlanningClient + 2816
+}
+
 -- HEIST_ISLAND_PLAYER_BD_DATA
 local GlobalPlayerBD_HeistIsland <const> = {
     -- HEIST_ISLAND_CONFIG
@@ -464,8 +470,6 @@ local g_sCURRENT_UGC_STATUS <const> = 2693440
 local g_iMissionEnteryType <const> = 1057440
 
 local function LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-
     local iArrayPos = MISC.GET_CONTENT_ID_INDEX(Data.iRootContentID)
 
     local tlName = GLOBAL_GET_STRING(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89)
@@ -503,6 +507,39 @@ local function LAUNCH_MISSION(Data)
     GLOBAL_SET_INT(g_sTransitionSessionData + 719, 1)
 
     GLOBAL_SET_INT(Globals.GlobalplayerBD_FM() + 96, 8)
+end
+
+-- g_structLocalHeistControl
+local g_sLocalMPHeistControl = {
+    _ = 2635126,
+    _lhcMyCorona = 2635126 + 3,
+}
+
+-- g_structMyHeistCorona
+g_sLocalMPHeistControl.lhcMyCorona = {
+    mhcAvailable = g_sLocalMPHeistControl._lhcMyCorona,
+    mhcContentID = g_sLocalMPHeistControl._lhcMyCorona + 1,
+    mhcIsFinale = g_sLocalMPHeistControl._lhcMyCorona + 7,
+    mhcIsIntroCutscene = g_sLocalMPHeistControl._lhcMyCorona + 8,
+    mhcIsMidStrandCutscene = g_sLocalMPHeistControl._lhcMyCorona + 9,
+    mhcMatcID = g_sLocalMPHeistControl._lhcMyCorona + 10,
+    mhcInCorona = g_sLocalMPHeistControl._lhcMyCorona + 11,
+    mhcAlreadyTransitioned = g_sLocalMPHeistControl._lhcMyCorona + 12,
+    mhcIsTutorialHeist = g_sLocalMPHeistControl._lhcMyCorona + 13,
+}
+
+local function LAUNCH_APARTMENT_HEIST(ContentID)
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcAvailable, true)
+    GLOBAL_SET_STRING(g_sLocalMPHeistControl.lhcMyCorona.mhcContentID, ContentID)
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcIsFinale, true)
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcIsIntroCutscene, false)
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcIsMidStrandCutscene, false)
+    GLOBAL_SET_INT(g_sLocalMPHeistControl.lhcMyCorona.mhcMatcID, -1) -- ILLEGAL_AT_COORDS_ID
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcInCorona, false)
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcAlreadyTransitioned, false)
+    GLOBAL_SET_BOOL(g_sLocalMPHeistControl.lhcMyCorona.mhcIsTutorialHeist, false)
+
+    GLOBAL_SET_BOOL(g_HeistPlanningClient.bHeistCoronaActive, true)
 end
 
 local function IS_PLAYER_BOSS_OF_A_GANG()
@@ -934,6 +971,7 @@ menu_mission:add_button("启动差事: 别惹德瑞", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有事务所")
@@ -951,6 +989,7 @@ menu_mission:add_button("启动差事: 犯罪现场 (潜行)", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 menu_mission:add_sameline()
 menu_mission:add_button("启动差事: 犯罪现场 (强攻)", function()
@@ -965,6 +1004,7 @@ menu_mission:add_button("启动差事: 犯罪现场 (强攻)", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 
 menu_mission:add_text("")
@@ -1008,6 +1048,7 @@ menu_mission:add_button("启动差事: 佩里科岛抢劫", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有虎鲸; 3. 在虎鲸内部;")
@@ -1099,6 +1140,39 @@ end)
 menu_mission:add_text("")
 
 
+local apartment_heist_final_select = 0
+menu_mission:add_imgui(function()
+    apartment_heist_final_select, clicked = ImGui.Combo("选择公寓抢劫任务", apartment_heist_final_select, {
+        "全福银行差事", "越狱", "突袭人道研究实验室", "首轮募资", "太平洋标准银行差事"
+    }, 5)
+end)
+menu_mission:add_button("启动差事: 公寓抢劫任务 终章", function()
+    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
+        return
+    end
+
+    local apartment_heist_final_content = {
+        [0] = "_T5Vz_ZV2kiIdfzRP3fJYQ",
+        [1] = "ISSREsbrtUGrxSiLmlUCRA",
+        [2] = "82ihljX03UO9tTUoLbukSQ",
+        [3] = "qr5DtZrmrkGad_9pemY39g",
+        [4] = "tYc3SkqXTk6ia7j0lezrbQ"
+    }
+
+    if not INTERIOR.IS_INTERIOR_SCENE() then
+        notify("启动差事", "你需要在公寓内部")
+        return
+    end
+
+    local ContentID = apartment_heist_final_content[apartment_heist_final_select]
+    LAUNCH_APARTMENT_HEIST(ContentID)
+    notify("启动差事", "请稍等...")
+end)
+menu_mission:add_text("要求: 1. 需要在公寓内部 抢劫任务面板位置; 2. 启动差事后右下角没有提示下载，就动两下")
+
+menu_mission:add_text("")
+
+
 local auto_shop_final_select = 0
 menu_mission:add_imgui(function()
     auto_shop_final_select, clicked = ImGui.Combo("选择改装铺合约", auto_shop_final_select, {
@@ -1142,6 +1216,7 @@ menu_mission:add_button("启动差事: 改装铺抢劫", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有改装铺; 3. 在改装铺内部")
@@ -1186,6 +1261,7 @@ menu_mission:add_button("启动差事: 末日豪劫 终章", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
@@ -1243,6 +1319,7 @@ menu_mission:add_button("启动差事: 末日豪劫 准备任务", function()
     }
 
     LAUNCH_MISSION(Data)
+    notify("启动差事", "请稍等...")
 end)
 menu_mission:add_sameline()
 menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
@@ -1506,7 +1583,7 @@ AutoIslandHeist.button = menu_automation:add_button("开启 全自动佩里科�
     AutoIslandHeist.setting.disableCut = AutoIslandHeist.menu.disableCut:is_enabled()
     AutoIslandHeist.setting.delay = getInputValue(AutoIslandHeist.menu.delay, 0, 5000)
 
-    
+
     if AutoIslandHeist.setting.rewardValue > 0 then
         -- Add random value
         if AutoIslandHeist.setting.addRandom then
