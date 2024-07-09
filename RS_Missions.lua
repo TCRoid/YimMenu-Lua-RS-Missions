@@ -206,6 +206,28 @@ function IS_IN_SESSION()
     return NETWORK.NETWORK_IS_SESSION_STARTED() and not IS_SCRIPT_RUNNING("maintransition")
 end
 
+--------------------------------
+-- Misc Functions
+--------------------------------
+
+function IS_PLAYER_IN_KOSATKA()
+    return INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) == 281345
+end
+
+function IS_THIS_HELP_MESSAGE_BEING_DISPLAYED(textLabel)
+    HUD.BEGIN_TEXT_COMMAND_IS_THIS_HELP_MESSAGE_BEING_DISPLAYED(textLabel)
+    return HUD.END_TEXT_COMMAND_IS_THIS_HELP_MESSAGE_BEING_DISPLAYED(0) -- HELP_TEXT_SLOT_STANDARD
+end
+
+function IS_PLAYER_IN_APARTMENT_PLANNING_ROOM()
+    if HUD.IS_HELP_MESSAGE_BEING_DISPLAYED() then
+        if IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_PRE_DONE2") or IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_STR_BG2") then
+            return true
+        end
+    end
+    return false
+end
+
 --#endregion
 
 
@@ -265,7 +287,10 @@ local FMMC_ROCKSTAR_CREATED <const> = {
 }
 
 -- TRANSITION_SESSION_NON_RESET_VARS
-local g_TransitionSessionNonResetVars <const> = 2685444
+local _g_TransitionSessionNonResetVars <const> = 2685444
+local g_TransitionSessionNonResetVars = {
+    bAmIHeistLeader = _g_TransitionSessionNonResetVars + 6381
+}
 
 -- FMMC_STRAND_MISSION_DATA
 local g_sTransitionSessionData <const> = 2684504
@@ -307,14 +332,22 @@ local Locals <const> = {
     ["fm_mission_controller"] = {
         iNextMission = 19746 + 1062,
         iTeamScore = 19746 + 1232 + 1, -- +[0~3]
+
+        iServerGameState = 19746,
         iServerBitSet = 19746 + 1,
         iServerBitSet1 = 19746 + 2,
+
+        iClientBitSet = function()
+            return 31621 + 1 + NETWORK.PARTICIPANT_ID_TO_INT() * 292 + 127
+        end,
 
         iLocalBoolCheck11 = 15166
     },
     ["fm_mission_controller_2020"] = {
         iNextMission = 50150 + 1583,
         iTeamScore = 50150 + 1770 + 1, -- +[0~3]
+
+        iServerGameState = 50150,
         iServerBitSet = 50150 + 1,
         iServerBitSet1 = 50150 + 2,
 
@@ -475,7 +508,7 @@ local function LAUNCH_MISSION(Data)
     local tlName = GLOBAL_GET_STRING(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89)
     local iMaxPlayers = GLOBAL_GET_INT(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 71)
 
-    GLOBAL_SET_INT(g_TransitionSessionNonResetVars + 3850, 1)
+    GLOBAL_SET_INT(_g_TransitionSessionNonResetVars + 3850, 1)
     GLOBAL_SET_INT(g_sCURRENT_UGC_STATUS + 1, 0)
     GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 2)
 
@@ -603,7 +636,7 @@ local function INSTANT_FINISH_FM_MISSION_CONTROLLER()
         GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstStrandNoReset, true)
         GLOBAL_SET_BOOL(StrandMissionData.bLastMission, true)
     end
-    LOCAL_SET_INT(mission_script, Locals[mission_script].iNextMission, 5)
+    --LOCAL_SET_INT(mission_script, Locals[mission_script].iNextMission, 5)
 
     LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
 
@@ -662,7 +695,16 @@ local Tables <const> = {
             get_label_text("H4P_FIN6_MKSM_T"), -- SABOTEUR
             get_label_text("H4P_FIN6_MKAR_T")  -- MARKSMAN
         }
-    }
+    },
+
+    HeistAwardsStats = {
+        -- ProgressBitset, AwardBool
+        [1] = { "MPPLY_HEISTFLOWORDERPROGRESS", "MPPLY_AWD_HST_ORDER" },
+        [2] = { "MPPLY_HEISTTEAMPROGRESSBITSET", "MPPLY_AWD_HST_SAME_TEAM" },
+        [3] = { "MPPLY_HEISTNODEATHPROGREITSET", "MPPLY_AWD_HST_ULT_CHAL" },
+        [4] = { "MPPLY_HEIST_1STPERSON_PROG", "MPPLY_AWD_COMPLET_HEIST_1STPER" },
+        [5] = { "MPPLY_HEISTMEMBERPROGRESSBITSET", "MPPLY_AWD_COMPLET_HEIST_MEM" }
+    },
 }
 
 
@@ -1035,7 +1077,7 @@ menu_mission:add_button("启动差事: 佩里科岛抢劫", function()
         notify("启动差事", "你需要注册为老大")
         return
     end
-    if INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) ~= 281345 then
+    if not IS_PLAYER_IN_KOSATKA() then
         notify("启动差事", "你需要在虎鲸内部")
         return
     end
@@ -1163,12 +1205,16 @@ menu_mission:add_button("启动差事: 公寓抢劫任务 终章", function()
         notify("启动差事", "你需要在公寓内部")
         return
     end
+    if not IS_PLAYER_IN_APARTMENT_PLANNING_ROOM() then
+        notify("启动差事", "你需要在抢劫计划面板附近")
+        return
+    end
 
     local ContentID = apartment_heist_final_content[apartment_heist_final_select]
     LAUNCH_APARTMENT_HEIST(ContentID)
     notify("启动差事", "请稍等...")
 end)
-menu_mission:add_text("要求: 1. 需要在公寓内部 抢劫任务面板位置; 2. 启动差事后右下角没有提示下载，就动两下")
+menu_mission:add_text("要求: 1. 需要在公寓内部 抢劫计划面板附近; 2. 启动差事后右下角没有提示下载，就动两下")
 
 menu_mission:add_text("")
 
@@ -1355,43 +1401,31 @@ menu_mission:add_text("数值为0, 则不进行限制; 限制最低收入后, �
 
 local menu_automation <const> = menu_root:add_tab("[RSM] 自动化任务")
 
-local MenuMMoney = {}
+local function getInputValue(input, min_value, max_value)
+    local input_value = input:get_value()
 
+    if input_value < min_value then
+        input_value = min_value
+    elseif input_value > max_value then
+        input_value = max_value
+    end
 
---------------------------------
--- Auto Island Heist
---------------------------------
+    input:set_value(input_value)
+    return input_value
+end
 
-menu_automation:add_text("<<  全自动佩里科岛抢劫  >>")
-
-menu_automation:add_text("*仅适用于单人*")
-menu_automation:add_text("要求: 1. 开启后无需任何操作，只需等待任务结束; 2. 自动注册CEO可能会有问题，可以提前注册")
-
--- menu_automation:add_button("设置偏好出生地点为 虎鲸", function()
---     stats.set_int("MPX_SPAWN_LOCATION_SETTING", 16)
--- end)
--- menu_automation:add_sameline()
--- menu_automation:add_text("然后切换战局即可")
 
 
 local bTransitionSessionSkipLbAndNjvs = g_sTransitionSessionData + 702
 
 local _coronaMenuData = 17445
 local coronaMenuData = {
-    iCurrentSelection = _coronaMenuData + 911,
+    iCurrentSelection = _coronaMenuData + 911
 }
 
 local _sLaunchMissionDetails = 19709
 local sLaunchMissionDetails2 = {
-    iIntroStatus = _sLaunchMissionDetails,
-    iHeistStatus = _sLaunchMissionDetails + 3,
-    iLobbyStatus = _sLaunchMissionDetails + 4,
-    iInviteScreenStatus = _sLaunchMissionDetails + 6,
-    iInCoronaStatus = _sLaunchMissionDetails + 7,
-    iBettingStatus = _sLaunchMissionDetails + 10,
-    iLoadStatus = _sLaunchMissionDetails + 11,
-
-    iMaxParticipants = _sLaunchMissionDetails + 32,
+    iMaxParticipants = _sLaunchMissionDetails + 32
 }
 
 local function REGISTER_AS_A_CEO()
@@ -1469,23 +1503,49 @@ local function JOIN_INVITE_ONLY_SESSION()
     end)
 end
 
-local function IS_PLAYER_IN_KOSATKA()
-    return INTERIOR.GET_INTERIOR_FROM_ENTITY(PLAYER.PLAYER_PED_ID()) == 281345
+
+
+g_TransitionSessionNonResetVars.sTransVars = {
+    iCoronaBitSet = _g_TransitionSessionNonResetVars + 1 + 2813
+}
+
+
+g_HeistPlanningClient.bLaunchTimerExpired = 1930926 + 2812
+
+
+
+local CORONA_STATUS_ENUM = {
+    CORONA_STATUS_IDLE = 0,
+    CORONA_STATUS_INTRO = 9,
+    CORONA_STATUS_TEAM_DM = 26,
+    CORONA_STATUS_HEIST_PLANNING = 27,
+    CORONA_STATUS_GENERIC_HEIST_PLANNING = 34
+}
+
+local function GET_CORONA_STATUS()
+    return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193)
 end
 
-local function getInputValue(input, min_value, max_value)
-    local input_value = input:get_value()
-
-    if input_value < min_value then
-        input_value = min_value
-    elseif input_value > max_value then
-        input_value = max_value
-    end
-
-    input:set_value(input_value)
-    return input_value
+local function IS_PLAYER_IN_CORONA()
+    return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193) ~= CORONA_STATUS_ENUM.CORONA_STATUS_IDLE
 end
 
+
+
+--------------------------------
+-- Auto Island Heist
+--------------------------------
+
+menu_automation:add_text("<<  全自动佩里科岛抢劫  >>")
+
+menu_automation:add_text("*仅适用于单人*")
+menu_automation:add_text("要求: 1. 开启后无需任何操作，只需等待任务结束; 2. 自动注册CEO可能会有问题，可以提前注册")
+
+-- menu_automation:add_button("设置偏好出生地点为 虎鲸", function()
+--     stats.set_int("MPX_SPAWN_LOCATION_SETTING", 16)
+-- end)
+-- menu_automation:add_sameline()
+-- menu_automation:add_text("然后切换战局即可")
 
 
 local AutoIslandHeistStatus <const> = {
@@ -1493,9 +1553,9 @@ local AutoIslandHeistStatus <const> = {
     Freemode = 1,
     InKotsatka = 2,
     RegisterAsCEO = 3,
-    IntroScreen = 4,
-    HeistPlanningScreen = 5,
-    InCoronaScreen = 6,
+    CoronaIntro = 4,
+    CoronaHeistPlanning = 5,
+    CoronaTeamDM = 6,
     InMission = 7,
     MissionEnd = 8,
     Cleanup = 9
@@ -1506,6 +1566,7 @@ local AutoIslandHeist = {
     button = 0,
     enable = false,
     status = AutoIslandHeistStatus.Disable,
+
     spawnLocation = nil,
 
     menu = {},
@@ -1560,7 +1621,7 @@ menu_automation:add_sameline()
 AutoIslandHeist.menu.disableCut = menu_automation:add_checkbox("禁用NPC分红")
 AutoIslandHeist.menu.disableCut:set_enabled(AutoIslandHeist.setting.disableCut)
 
-AutoIslandHeist.menu.delay = menu_automation:add_input_int("延迟 [0 ~ 5000] (毫秒, 到达新的状态后的等待时间)")
+AutoIslandHeist.menu.delay = menu_automation:add_input_int("延迟1 [0 ~ 5000] (毫秒, 到达新的状态后的等待时间)")
 AutoIslandHeist.menu.delay:set_value(AutoIslandHeist.setting.delay)
 
 
@@ -1650,7 +1711,7 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
                     LAUNCH_MISSION(Data)
 
                     AutoIslandHeist.notify("启动差事...")
-                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.IntroScreen)
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.CoronaIntro)
                 end
             end
         end
@@ -1660,25 +1721,23 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
 
             AutoIslandHeist.setStatus(AutoIslandHeistStatus.InKotsatka)
         end
-    elseif eStatus == AutoIslandHeistStatus.IntroScreen then
+    elseif eStatus == AutoIslandHeistStatus.CoronaIntro then
         local script_name = "fmmc_launcher"
         if IS_SCRIPT_RUNNING(script_name) then
-            -- FM_MISSION_INTRO_SCREEN_MAINTAIN
-            if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iIntroStatus) == 3 then
+            if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_INTRO then
                 script_util:sleep(setting.delay)
 
                 LOCAL_SET_INT(script_name, sLaunchMissionDetails2.iMaxParticipants, 1)
 
                 AutoIslandHeist.notify("开始游戏...")
-                AutoIslandHeist.setStatus(AutoIslandHeistStatus.HeistPlanningScreen)
+                AutoIslandHeist.setStatus(AutoIslandHeistStatus.CoronaHeistPlanning)
             end
         end
-    elseif eStatus == AutoIslandHeistStatus.HeistPlanningScreen then
+    elseif eStatus == AutoIslandHeistStatus.CoronaHeistPlanning then
         if IS_SCRIPT_RUNNING("heist_island_planning") then
             local script_name = "fmmc_launcher"
             if IS_SCRIPT_RUNNING(script_name) then
-                -- FM_MISSION_LOAD_IN_CORONA_SCENE_COMPLETE
-                if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iLoadStatus) == 2 then
+                if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_GENERIC_HEIST_PLANNING then
                     script_util:sleep(setting.delay)
 
 
@@ -1709,53 +1768,54 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
                     GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer(), 0)
 
                     AutoIslandHeist.notify("设置面板并继续...")
-                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.InCoronaScreen)
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.CoronaTeamDM)
                 end
             end
         end
-    elseif eStatus == AutoIslandHeistStatus.InCoronaScreen then
-        if IS_SCRIPT_RUNNING("heist_island_planning") then
-            local script_name = "fmmc_launcher"
-            if IS_SCRIPT_RUNNING(script_name) then
-                -- FM_MISSION_IN_CORONA_SCREEN_MAINTAIN
-                if LOCAL_GET_INT(script_name, sLaunchMissionDetails2.iInCoronaStatus) == 4 then
-                    script_util:sleep(setting.delay)
+    elseif eStatus == AutoIslandHeistStatus.CoronaTeamDM then
+        local script_name = "fmmc_launcher"
+        if IS_SCRIPT_RUNNING(script_name) then
+            if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_TEAM_DM then
+                script_util:sleep(setting.delay)
 
-                    -- ciCORONA_LOBBY_START_GAME
-                    LOCAL_SET_INT(script_name, coronaMenuData.iCurrentSelection, 14)
+                -- ciCORONA_LOBBY_START_GAME
+                LOCAL_SET_INT(script_name, coronaMenuData.iCurrentSelection, 14)
 
-                    -- FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT
-                    PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
+                -- FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT
+                PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
 
-                    AutoIslandHeist.notify("准备就绪，进入任务...")
-                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.InMission)
-                end
+                AutoIslandHeist.notify("准备就绪，进入任务...")
+                AutoIslandHeist.setStatus(AutoIslandHeistStatus.InMission)
             end
         end
     elseif eStatus == AutoIslandHeistStatus.InMission then
         if IS_IN_SESSION() then
-            if IS_SCRIPT_RUNNING("fm_mission_controller_2020") then
-                script_util:sleep(setting.delay + 3000)
+            local script_name = "fm_mission_controller_2020"
+            if IS_SCRIPT_RUNNING(script_name) then
+                -- GAME_STATE_RUNNING
+                if LOCAL_GET_INT(script_name, Locals[script_name].iServerGameState) == 6 then
+                    script_util:sleep(setting.delay + 3000)
 
-                if setting.rewardValue > 0 then
-                    local rewardValue = setting.rewardValue
-                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_TEQUILA"], rewardValue)
-                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_PEARL_NECKLACE"], rewardValue)
-                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_BEARER_BONDS"], rewardValue)
-                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_PINK_DIAMOND"], rewardValue)
-                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_MADRAZO_FILES"], rewardValue)
-                    GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_SAPPHIRE_PANTHER_STATUE"], rewardValue)
+                    if setting.rewardValue > 0 then
+                        local rewardValue = setting.rewardValue
+                        GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_TEQUILA"], rewardValue)
+                        GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_PEARL_NECKLACE"], rewardValue)
+                        GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_BEARER_BONDS"], rewardValue)
+                        GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_PINK_DIAMOND"], rewardValue)
+                        GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_MADRAZO_FILES"], rewardValue)
+                        GLOBAL_SET_INT(Tunables["IH_PRIMARY_TARGET_VALUE_SAPPHIRE_PANTHER_STATUE"], rewardValue)
+                    end
+                    if setting.disableCut then
+                        GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_FENCING_FEE"], 0)
+                        GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_PAVEL_CUT"], 0)
+                    end
+                    INSTANT_FINISH_FM_MISSION_CONTROLLER()
+
+                    GLOBAL_SET_BOOL(bTransitionSessionSkipLbAndNjvs, true)
+
+                    AutoIslandHeist.notify("直接完成任务...")
+                    AutoIslandHeist.setStatus(AutoIslandHeistStatus.MissionEnd)
                 end
-                if setting.disableCut then
-                    GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_FENCING_FEE"], 0)
-                    GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_PAVEL_CUT"], 0)
-                end
-                INSTANT_FINISH_FM_MISSION_CONTROLLER()
-
-                GLOBAL_SET_BOOL(bTransitionSessionSkipLbAndNjvs, true)
-
-                AutoIslandHeist.notify("直接完成任务...")
-                AutoIslandHeist.setStatus(AutoIslandHeistStatus.MissionEnd)
             end
         end
     elseif eStatus == AutoIslandHeistStatus.MissionEnd then
@@ -1766,6 +1826,227 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
     elseif eStatus == AutoIslandHeistStatus.Cleanup then
         AutoIslandHeist.cleanup()
         AutoIslandHeist.notify("结束...")
+        return false
+    end
+end)
+
+
+
+
+menu_automation:add_separator()
+
+
+
+
+--------------------------------
+-- Auto Apartment Heist
+--------------------------------
+
+menu_automation:add_text("<<  全自动公寓抢劫  >>")
+
+menu_automation:add_text("*仅适用于单人*")
+menu_automation:add_text("同时完成所有奖章挑战, 可获得1400多万")
+menu_automation:add_text("要求: 1. 需要在公寓内部 抢劫计划面板附近; 2. 启动差事后右下角没有提示下载，就动两下; 3. 如果精英挑战没有完成就增加延迟")
+
+
+local AutoApartmentHeistStatus <const> = {
+    Disable = 0,
+    InPlanningRoom = 1,
+    CoronaIntro = 2,
+    CoronaHeistPlanning = 3,
+    CoronaTeamDM = 4,
+    InMission = 5,
+    MissionEnd = 6,
+    Cleanup = 7
+}
+
+
+local AutoApartmentHeist = {
+    button = 0,
+    enable = false,
+    status = AutoApartmentHeistStatus.Disable,
+
+    minPlayers = false,
+    maxTeams = false,
+
+    menu = {},
+    setting = {
+        delay = 1500
+    }
+}
+
+function AutoApartmentHeist.processHeistAward()
+    for _, item in pairs(Tables.HeistAwardsStats) do
+        stats.set_int(item[1], 268435455)
+        stats.set_bool(item[2], false)
+    end
+
+
+    local script_name = "fm_mission_controller"
+
+    -- Ultimate Challenge
+    GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 2)
+    -- First Person
+    GLOBAL_SET_INT(FMMC_STRUCT.iFixedCamera, 1)
+    -- Member
+    GLOBAL_SET_BOOL(g_TransitionSessionNonResetVars.bAmIHeistLeader, false)
+    LOCAL_CLEAR_BIT(script_name, Locals[script_name].iClientBitSet(), 20) -- PBBOOL_HEIST_HOST
+end
+
+function AutoApartmentHeist.setStatus(eStatus)
+    AutoApartmentHeist.status = eStatus
+end
+
+function AutoApartmentHeist.toggleButtonName(toggle)
+    if toggle then
+        AutoApartmentHeist.button:set_text("开启 全自动公寓抢劫")
+    else
+        AutoApartmentHeist.button:set_text("停止 全自动公寓抢劫")
+    end
+end
+
+function AutoApartmentHeist.cleanup()
+    MenuHMission["SetMinPlayers"]:set_enabled(AutoApartmentHeist.minPlayers)
+    MenuHMission["SetMaxTeams"]:set_enabled(AutoApartmentHeist.maxTeams)
+
+    AutoApartmentHeist.enable = false
+    AutoApartmentHeist.status = AutoApartmentHeistStatus.Disable
+    AutoApartmentHeist.toggleButtonName(true)
+end
+
+function AutoApartmentHeist.notify(text)
+    notify("全自动公寓抢劫", text)
+end
+
+AutoApartmentHeist.menu.delay = menu_automation:add_input_int("延迟2 [0 ~ 5000] (毫秒, 到达新的状态后的等待时间)")
+AutoApartmentHeist.menu.delay:set_value(AutoApartmentHeist.setting.delay)
+
+
+AutoApartmentHeist.button = menu_automation:add_button("开启 全自动公寓抢劫", function()
+    if AutoApartmentHeist.enable then
+        AutoApartmentHeist.enable = false
+        return
+    end
+
+    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
+        return
+    end
+    if not INTERIOR.IS_INTERIOR_SCENE() then
+        AutoApartmentHeist.notify("你需要在公寓内部")
+        return
+    end
+    if not IS_PLAYER_IN_APARTMENT_PLANNING_ROOM() then
+        AutoApartmentHeist.notify("你需要在抢劫计划面板附近")
+        return
+    end
+
+    AutoApartmentHeist.minPlayers = MenuHMission["SetMinPlayers"]:is_enabled()
+    AutoApartmentHeist.maxTeams = MenuHMission["SetMaxTeams"]:is_enabled()
+
+    MenuHMission["SetMinPlayers"]:set_enabled(true)
+    MenuHMission["SetMaxTeams"]:set_enabled(true)
+
+    AutoApartmentHeist.setting.delay = getInputValue(AutoApartmentHeist.menu.delay, 0, 5000)
+
+    AutoApartmentHeist.toggleButtonName(false)
+    AutoApartmentHeist.enable = true
+
+    AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.InPlanningRoom)
+end)
+menu_automation:add_sameline()
+menu_automation:add_button("清除奖章挑战记录", function()
+    for _, item in pairs(Tables.HeistAwardsStats) do
+        stats.set_int(item[1], 0)
+        stats.set_bool(item[2], false)
+    end
+    notify("清除奖章挑战记录", "完成")
+end)
+
+
+script.register_looped("RS_Missions.AutoApartmentHeist", function(script_util)
+    if AutoApartmentHeist.status == AutoApartmentHeistStatus.Disable then
+        return
+    end
+
+    if not AutoApartmentHeist.enable then
+        AutoApartmentHeist.cleanup()
+        AutoApartmentHeist.notify("已停止...")
+        return
+    end
+
+    local setting = AutoApartmentHeist.setting
+    local eStatus = AutoApartmentHeist.status
+
+    if eStatus == AutoApartmentHeistStatus.InPlanningRoom then
+        local ContentID = "tYc3SkqXTk6ia7j0lezrbQ"
+        LAUNCH_APARTMENT_HEIST(ContentID)
+
+        AutoApartmentHeist.notify("启动差事...")
+        AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.CoronaIntro)
+    elseif eStatus == AutoApartmentHeistStatus.CoronaIntro then
+        local script_name = "fmmc_launcher"
+        if IS_SCRIPT_RUNNING(script_name) then
+            if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_INTRO then
+                script_util:sleep(setting.delay)
+
+                LOCAL_SET_INT(script_name, sLaunchMissionDetails2.iMaxParticipants, 1)
+
+                GLOBAL_SET_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 0)   -- CORONA_HEIST_CUTSCENE_HAS_BEEN_VALIDATED
+                GLOBAL_CLEAR_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 1) -- CORONA_HEIST_FINALE_CUTSCENE_CAN_PLAY
+
+                AutoApartmentHeist.notify("开始游戏...")
+                AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.CoronaHeistPlanning)
+            end
+        end
+    elseif eStatus == AutoApartmentHeistStatus.CoronaHeistPlanning then
+        if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_HEIST_PLANNING then
+            script_util:sleep(setting.delay)
+
+            GLOBAL_SET_BOOL(g_HeistPlanningClient.bLaunchTimerExpired, true)
+
+            AutoApartmentHeist.notify("继续...")
+            AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.CoronaTeamDM)
+        end
+    elseif eStatus == AutoApartmentHeistStatus.CoronaTeamDM then
+        local script_name = "fmmc_launcher"
+        if IS_SCRIPT_RUNNING(script_name) then
+            if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_TEAM_DM then
+                script_util:sleep(setting.delay)
+
+                -- ciCORONA_LOBBY_START_GAME
+                LOCAL_SET_INT(script_name, coronaMenuData.iCurrentSelection, 14)
+
+                -- FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT
+                PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
+
+                AutoApartmentHeist.notify("准备就绪，进入任务...")
+                AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.InMission)
+            end
+        end
+    elseif eStatus == AutoApartmentHeistStatus.InMission then
+        if IS_IN_SESSION() then
+            local script_name = "fm_mission_controller"
+            if IS_SCRIPT_RUNNING(script_name) then
+                -- GAME_STATE_RUNNING
+                if LOCAL_GET_INT(script_name, Locals[script_name].iServerGameState) == 9 then
+                    script_util:sleep(setting.delay + 1000)
+
+                    AutoApartmentHeist.processHeistAward()
+                    INSTANT_FINISH_FM_MISSION_CONTROLLER()
+
+                    AutoApartmentHeist.notify("直接完成任务...")
+                    AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.MissionEnd)
+                end
+            end
+        end
+    elseif eStatus == AutoApartmentHeistStatus.MissionEnd then
+        if not IS_SCRIPT_RUNNING("fm_mission_controller") then
+            AutoApartmentHeist.notify("任务已完成...")
+            AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.Cleanup)
+        end
+    elseif eStatus == AutoApartmentHeistStatus.Cleanup then
+        AutoApartmentHeist.cleanup()
+        AutoApartmentHeist.notify("结束...")
         return false
     end
 end)
