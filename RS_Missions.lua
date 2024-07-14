@@ -2,15 +2,14 @@
 -- Author: Rostal
 --------------------------------
 
-local SUPPORT_GAME_VERSION <const> = "3258" -- 1.69
+local SUPPORT_GAME_VERSION <const> = "1.69-3258"
 
 
 --#region check game version
 
--- local online_version = NETWORK.GET_ONLINE_VERSION()
 local build_version = memory.scan_pattern("8B C3 33 D2 C6 44 24 20"):add(0x24):rip()
--- local CURRENT_GAME_VERSION <const> = string.format("%s-%s", online_version, build_version:get_string())
-local CURRENT_GAME_VERSION <const> = build_version:get_string()
+local online_version = build_version:add(0x20)
+local CURRENT_GAME_VERSION <const> = string.format("%s-%s", online_version:get_string(), build_version:get_string())
 
 local IS_SUPPORT = true
 if SUPPORT_GAME_VERSION ~= CURRENT_GAME_VERSION then
@@ -221,7 +220,7 @@ end
 
 function IS_PLAYER_IN_APARTMENT_PLANNING_ROOM()
     if HUD.IS_HELP_MESSAGE_BEING_DISPLAYED() then
-        if IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_PRE_DONE2") or IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_STR_BG2") then
+        if IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_PRE_DONE2") or IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_STR_BG2") or IS_THIS_HELP_MESSAGE_BEING_DISPLAYED("HEIST_PRE_VIEW2") then
             return true
         end
     end
@@ -480,6 +479,8 @@ local fm_content_xxx = {
 
 local g_sMPTunables <const> = 262145
 local Tunables <const> = {
+    ["DISABLE_STAT_CAP_CHECK"]                          = g_sMPTunables + 158,
+
     ["HIGH_ROCKSTAR_MISSIONS_MODIFIER"]                 = g_sMPTunables + 2403,
     ["LOW_ROCKSTAR_MISSIONS_MODIFIER"]                  = g_sMPTunables + 2407,
 
@@ -1206,8 +1207,8 @@ menu_mission:add_button("启动差事: 公寓抢劫任务 终章", function()
         return
     end
     if not IS_PLAYER_IN_APARTMENT_PLANNING_ROOM() then
-        notify("启动差事", "你需要在抢劫计划面板附近")
-        return
+        notify("启动差事", "你可能没有在抢劫计划面板附近")
+        -- return
     end
 
     local ContentID = apartment_heist_final_content[apartment_heist_final_select]
@@ -1405,14 +1406,18 @@ local function getInputValue(input, min_value, max_value)
     local input_value = input:get_value()
 
     if input_value < min_value then
-        input_value = min_value
-    elseif input_value > max_value then
-        input_value = max_value
+        input:set_value(min_value)
+        return min_value
     end
 
-    input:set_value(input_value)
+    if input_value > max_value then
+        input:set_value(max_value)
+        return max_value
+    end
+
     return input_value
 end
+
 
 
 
@@ -2056,6 +2061,47 @@ end)
 
 
 
+----------------------------------------
+-- Menu: Misc
+----------------------------------------
+
+local menu_misc <const> = menu_root:add_tab("[RSM] 其它")
+
+local MenuMisc = {}
+
+menu_misc:add_text("零食和护甲")
+MenuMisc["DisableStatCapCheck"] = menu_misc:add_checkbox("禁用最大携带量限制")
+menu_misc:add_sameline()
+menu_misc:add_button("零食数量 9999", function()
+    local value = 9999
+    stats.set_int("MPX_NO_BOUGHT_YUM_SNACKS", value)
+    stats.set_int("MPX_NO_BOUGHT_HEALTH_SNACKS", value)
+    stats.set_int("MPX_NO_BOUGHT_EPIC_SNACKS", value)
+    stats.set_int("MPX_NUMBER_OF_ORANGE_BOUGHT", value)
+    stats.set_int("MPX_NUMBER_OF_BOURGE_BOUGHT", value)
+    stats.set_int("MPX_NUMBER_OF_CHAMP_BOUGHT", value)
+    stats.set_int("MPX_CIGARETTES_BOUGHT", value)
+    stats.set_int("MPX_NUMBER_OF_SPRUNK_BOUGHT", value)
+    toast("完成！")
+end)
+menu_misc:add_sameline()
+menu_misc:add_button("护甲数量 9999", function()
+    local value = 9999
+    stats.set_int("MPX_MP_CHAR_ARMOUR_1_COUNT", value)
+    stats.set_int("MPX_MP_CHAR_ARMOUR_2_COUNT", value)
+    stats.set_int("MPX_MP_CHAR_ARMOUR_3_COUNT", value)
+    stats.set_int("MPX_MP_CHAR_ARMOUR_4_COUNT", value)
+    stats.set_int("MPX_MP_CHAR_ARMOUR_5_COUNT", value)
+    toast("完成！")
+end)
+
+
+
+
+
+
+
+
 --------------------------------
 -- Loop Script
 --------------------------------
@@ -2098,9 +2144,13 @@ script.register_looped("RS_Missions.Main", function()
             LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
         end
     end
+
+    if MenuMisc["DisableStatCapCheck"]:is_enabled() then
+        GLOBAL_SET_INT(Tunables["DISABLE_STAT_CAP_CHECK"], 1)
+    end
 end)
 
-script.register_looped("RS_Missions.Mission_Earning", function()
+script.register_looped("RS_Missions.MissionEarning", function()
     local earning_max = MenuHMission["MissionEarningHigh"]:get_value()
     local earning_min = MenuHMission["MissionEarningLow"]:get_value()
 
