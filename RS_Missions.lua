@@ -2,21 +2,8 @@
 -- Author: Rostal
 --------------------------------
 
-local SUPPORT_GAME_VERSION <const> = "1.69-3258"
+local SUPPORT_GAME_VERSION <const> = "1.69-3274"
 
-
---#region check game version
-
-local build_version = memory.scan_pattern("8B C3 33 D2 C6 44 24 20"):add(0x24):rip()
-local online_version = build_version:add(0x20)
-local CURRENT_GAME_VERSION <const> = string.format("%s-%s", online_version:get_string(), build_version:get_string())
-
-local IS_SUPPORT = true
-if SUPPORT_GAME_VERSION ~= CURRENT_GAME_VERSION then
-    IS_SUPPORT = false
-end
-
---#endregion
 
 
 --#region functions
@@ -252,12 +239,8 @@ local Globals <const> = {
     GlobalplayerBD_FM_3 = function()
         return 1887305 + 1 + PLAYER.PLAYER_ID() * 610
     end,
-
-    -- NET_HEIST_PLANNING_GENERIC_PLAYER_BD_DATA
-    GlobalPlayerBD_NetHeistPlanningGeneric = function()
-        return 1972760 + 1 + PLAYER.PLAYER_ID() * 27
-    end,
 }
+
 
 -- FMMC_GLOBAL_STRUCT
 local g_FMMC_STRUCT <const> = 4718592
@@ -285,27 +268,40 @@ local FMMC_ROCKSTAR_CREATED <const> = {
     sMissionHeaderVars = g_FMMC_ROCKSTAR_CREATED + 4 + 1, -- +[iArrayPos]*89
 }
 
+
 -- TRANSITION_SESSION_NON_RESET_VARS
 local _g_TransitionSessionNonResetVars <const> = 2685444
-local g_TransitionSessionNonResetVars = {
+-- TRANSITION_SESSION_MAINTAIN_VARS
+local _sTransVars <const> = _g_TransitionSessionNonResetVars + 1
+
+local g_TransitionSessionNonResetVars <const> = {
+    sTransVars = {
+        iCoronaBitSet = _sTransVars + 2813
+    },
+
     bAmIHeistLeader = _g_TransitionSessionNonResetVars + 6381
 }
 
--- FMMC_STRAND_MISSION_DATA
+
+-- FMMC_TRANSITION_SESSION_DATA
 local g_sTransitionSessionData <const> = 2684504
-local sStrandMissionData <const> = g_sTransitionSessionData + 43
-local StrandMissionData <const> = {
-    bPassedFirstMission = sStrandMissionData + 55,
-    bPassedFirstStrandNoReset = sStrandMissionData + 56,
-    bIsThisAStrandMission = sStrandMissionData + 57,
-    bLastMission = sStrandMissionData + 58
+
+-- FMMC_STRAND_MISSION_DATA
+local _sStrandMissionData <const> = g_sTransitionSessionData + 43
+local sStrandMissionData <const> = {
+    bPassedFirstMission = _sStrandMissionData + 55,
+    bPassedFirstStrandNoReset = _sStrandMissionData + 56,
+    bIsThisAStrandMission = _sStrandMissionData + 57,
+    bLastMission = _sStrandMissionData + 58
 }
+
 
 -- HEIST_CLIENT_PLANNING_LOCAL_DATA
 local _g_HeistPlanningClient <const> = 1930926
 local g_HeistPlanningClient <const> = {
     bHeistCoronaActive = _g_HeistPlanningClient + 2816
 }
+
 
 -- HEIST_ISLAND_PLAYER_BD_DATA
 local GlobalPlayerBD_HeistIsland <const> = {
@@ -318,7 +314,7 @@ local GlobalPlayerBD_HeistIsland <const> = {
 -- NET_HEIST_PLANNING_GENERIC_PLAYER_BD_DATA
 local GlobalPlayerBD_NetHeistPlanningGeneric <const> = {
     stFinaleLaunchTimer = function()
-        return Globals.GlobalPlayerBD_NetHeistPlanningGeneric() + 18
+        return 1972760 + 1 + PLAYER.PLAYER_ID() * 27 + 18
     end
 }
 
@@ -375,10 +371,11 @@ local Locals <const> = {
 }
 
 -- MISSION_TO_LAUNCH_DETAILS
-local sLaunchMissionDetails <const> = 19709
-local LaunchMissionDetails <const> = {
-    iMinPlayers = sLaunchMissionDetails + 15,
-    iMissionVariation = sLaunchMissionDetails + 34
+local _sLaunchMissionDetails <const> = 19709
+local sLaunchMissionDetails <const> = {
+    iMinPlayers = _sLaunchMissionDetails + 15,
+    iMaxParticipants = _sLaunchMissionDetails + 32,
+    iMissionVariation = _sLaunchMissionDetails + 34
 }
 
 -- `freemode` Time Trial
@@ -632,10 +629,10 @@ local function INSTANT_FINISH_FM_MISSION_CONTROLLER()
         end
     end
 
-    if GLOBAL_GET_BOOL(StrandMissionData.bIsThisAStrandMission) then
-        GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstMission, true)
-        GLOBAL_SET_BOOL(StrandMissionData.bPassedFirstStrandNoReset, true)
-        GLOBAL_SET_BOOL(StrandMissionData.bLastMission, true)
+    if GLOBAL_GET_BOOL(sStrandMissionData.bIsThisAStrandMission) then
+        GLOBAL_SET_BOOL(sStrandMissionData.bPassedFirstMission, true)
+        GLOBAL_SET_BOOL(sStrandMissionData.bPassedFirstStrandNoReset, true)
+        GLOBAL_SET_BOOL(sStrandMissionData.bLastMission, true)
     end
     --LOCAL_SET_INT(mission_script, Locals[mission_script].iNextMission, 5)
 
@@ -716,10 +713,21 @@ local Tables <const> = {
 
 local menu_root <const> = gui.add_tab("RS Missions")
 
-menu_root:add_text("支持的GTA版本: " .. SUPPORT_GAME_VERSION)
-menu_root:add_text("当前GTA版本: " .. CURRENT_GAME_VERSION)
-local status_text = IS_SUPPORT and "支持" or "不支持当前游戏版本, 请停止使用"
-menu_root:add_text("状态: " .. status_text)
+script.run_in_fiber(function()
+    local build_version = memory.scan_pattern("8B C3 33 D2 C6 44 24 20"):add(0x24):rip()
+    local online_version = build_version:add(0x20)
+    local CURRENT_GAME_VERSION <const> = string.format("%s-%s", online_version:get_string(), build_version:get_string())
+
+
+    menu_root:add_text("支持的GTA版本: " .. SUPPORT_GAME_VERSION)
+    menu_root:add_text("当前GTA版本: " .. CURRENT_GAME_VERSION)
+
+    local status_text = "支持"
+    if SUPPORT_GAME_VERSION ~= CURRENT_GAME_VERSION then
+        status_text = "不支持当前游戏版本, 请停止使用"
+    end
+    menu_root:add_text("状态: " .. status_text)
+end)
 
 
 
@@ -958,7 +966,9 @@ menu_mission:add_sameline()
 MenuHMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
 
 menu_mission:add_button("直接完成任务 (通用)", function()
-    INSTANT_FINISH_FM_MISSION_CONTROLLER()
+    script.run_in_fiber(function()
+        INSTANT_FINISH_FM_MISSION_CONTROLLER()
+    end)
 end)
 menu_mission:add_sameline()
 menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问题)", function()
@@ -1215,6 +1225,11 @@ menu_mission:add_button("启动差事: 公寓抢劫任务 终章", function()
     LAUNCH_APARTMENT_HEIST(ContentID)
     notify("启动差事", "请稍等...")
 end)
+menu_mission:add_sameline()
+menu_mission:add_button("跳过动画 (点击 开始游戏 之前使用)", function()
+    GLOBAL_SET_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 0)   -- CORONA_HEIST_CUTSCENE_HAS_BEEN_VALIDATED
+    GLOBAL_CLEAR_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 1) -- CORONA_HEIST_FINALE_CUTSCENE_CAN_PLAY
+end)
 menu_mission:add_text("要求: 1. 需要在公寓内部 抢劫计划面板附近; 2. 启动差事后右下角没有提示下载，就动两下")
 
 menu_mission:add_text("")
@@ -1428,10 +1443,6 @@ local coronaMenuData = {
     iCurrentSelection = _coronaMenuData + 911
 }
 
-local _sLaunchMissionDetails = 19709
-local sLaunchMissionDetails2 = {
-    iMaxParticipants = _sLaunchMissionDetails + 32
-}
 
 local function REGISTER_AS_A_CEO()
     script.run_in_fiber(function(script_util)
@@ -1510,9 +1521,6 @@ end
 
 
 
-g_TransitionSessionNonResetVars.sTransVars = {
-    iCoronaBitSet = _g_TransitionSessionNonResetVars + 1 + 2813
-}
 
 
 g_HeistPlanningClient.bLaunchTimerExpired = 1930926 + 2812
@@ -1732,7 +1740,7 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
             if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_INTRO then
                 script_util:sleep(setting.delay)
 
-                LOCAL_SET_INT(script_name, sLaunchMissionDetails2.iMaxParticipants, 1)
+                LOCAL_SET_INT(script_name, sLaunchMissionDetails.iMaxParticipants, 1)
 
                 AutoIslandHeist.notify("开始游戏...")
                 AutoIslandHeist.setStatus(AutoIslandHeistStatus.CoronaHeistPlanning)
@@ -1994,7 +2002,7 @@ script.register_looped("RS_Missions.AutoApartmentHeist", function(script_util)
             if GET_CORONA_STATUS() == CORONA_STATUS_ENUM.CORONA_STATUS_INTRO then
                 script_util:sleep(setting.delay)
 
-                LOCAL_SET_INT(script_name, sLaunchMissionDetails2.iMaxParticipants, 1)
+                LOCAL_SET_INT(script_name, sLaunchMissionDetails.iMaxParticipants, 1)
 
                 GLOBAL_SET_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 0)   -- CORONA_HEIST_CUTSCENE_HAS_BEEN_VALIDATED
                 GLOBAL_CLEAR_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 1) -- CORONA_HEIST_FINALE_CUTSCENE_CAN_PLAY
@@ -2108,13 +2116,13 @@ end)
 
 script.register_looped("RS_Missions.Main", function()
     if MenuHMission["SetMinPlayers"]:is_enabled() then
-        local script = "fmmc_launcher"
-        if IS_SCRIPT_RUNNING(script) then
-            local iArrayPos = LOCAL_GET_INT(script, LaunchMissionDetails.iMissionVariation)
+        local script_name = "fmmc_launcher"
+        if IS_SCRIPT_RUNNING(script_name) then
+            local iArrayPos = LOCAL_GET_INT(script_name, sLaunchMissionDetails.iMissionVariation)
             if iArrayPos > 0 then
                 if GLOBAL_GET_INT(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 69) > 1 then
                     GLOBAL_SET_INT(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 69, 1)
-                    LOCAL_SET_INT(script, LaunchMissionDetails.iMinPlayers, 1)
+                    LOCAL_SET_INT(script_name, sLaunchMissionDetails.iMinPlayers, 1)
                 end
 
                 GLOBAL_SET_INT(FMMC_STRUCT.iMinNumParticipants, 1)
