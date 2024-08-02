@@ -61,6 +61,10 @@ function GLOBAL_GET_BOOL(global)
     return globals.get_int(global) == 1
 end
 
+function GLOBAL_GET_VECTOR3(global)
+    return globals.get_vec3(global)
+end
+
 function GLOBAL_SET_BIT(global, bit)
     local value = SET_BIT(globals.get_int(global), bit)
     globals.set_int(global, value)
@@ -98,6 +102,10 @@ end
 
 function LOCAL_GET_FLOAT(script_name, script_local)
     return locals.get_float(script_name, script_local)
+end
+
+function LOCAL_GET_BOOL(script_name, script_local)
+    return locals.get_int(script_name, script_local) == 1
 end
 
 function LOCAL_SET_BIT(script_name, script_local, bit)
@@ -176,12 +184,6 @@ function GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
     end
 
     return nil
-end
-
-function REQUEST_FMMC_SCRIPT_HOST(script_name)
-    if NETWORK.NETWORK_GET_HOST_OF_SCRIPT(script_name, 0, 0) ~= PLAYER.PLAYER_ID() then
-        network.force_script_host(script_name)
-    end
 end
 
 --------------------------------
@@ -302,6 +304,13 @@ local g_HeistPlanningClient <const> = {
     bHeistCoronaActive = _g_HeistPlanningClient + 2816
 }
 
+-- HEIST_CLIENT_SHARED_LOCAL_DATA
+local _g_HeistSharedClient <const> = 1934536
+local g_HeistSharedClient <const> = {
+    PlanningBoardIndex = _g_HeistSharedClient,
+    vBoardPosition = _g_HeistSharedClient + 16
+}
+
 
 -- HEIST_ISLAND_PLAYER_BD_DATA
 local GlobalPlayerBD_HeistIsland <const> = {
@@ -336,7 +345,11 @@ local Locals <const> = {
             return 31621 + 1 + NETWORK.PARTICIPANT_ID_TO_INT() * 292 + 127
         end,
 
-        iLocalBoolCheck11 = 15166
+        iLocalBoolCheck11 = 15166,
+
+        tdObjectiveLimitTimer = 26172 + 740 + 1,      -- +[0~3]*2
+        tdMultiObjectiveLimitTimer = 26172 + 749 + 1, -- +[0~3]*2
+        iMultiObjectiveTimeLimit = 26172 + 765 + 1    -- +[0~3]
     },
     ["fm_mission_controller_2020"] = {
         iNextMission = 50150 + 1583,
@@ -346,7 +359,11 @@ local Locals <const> = {
         iServerBitSet = 50150 + 1,
         iServerBitSet1 = 50150 + 2,
 
-        iLocalBoolCheck11 = 48799
+        iLocalBoolCheck11 = 48799,
+
+        tdObjectiveLimitTimer = 56798 + 297 + 1,      -- +[0~3]*2
+        tdMultiObjectiveLimitTimer = 56798 + 306 + 1, -- +[0~3]*2
+        iMultiObjectiveTimeLimit = 56798 + 322 + 1    -- +[0~3]
     },
 
     ["fm_content_security_contract"] = {
@@ -614,14 +631,50 @@ local function INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
     LOCAL_SET_INT(script_name, Locals[script_name].eEndReason, 3)
 end
 
-local function INSTANT_FINISH_FM_MISSION_CONTROLLER()
-    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
-    if mission_script == nil then
-        return
+-- `fm_mission_controller` and `fm_mission_controller_2020`
+local FM_MISSION_CONTROLLER = {}
+
+function FM_MISSION_CONTROLLER.IS_SCRIPT_HOST(script_name)
+    return NETWORK.NETWORK_GET_HOST_OF_SCRIPT(script_name, 0, 0) == PLAYER.PLAYER_ID()
+end
+
+function FM_MISSION_CONTROLLER.REQUEST_SCRIPT_HOST(script_name, script_util)
+    if FM_MISSION_CONTROLLER.IS_SCRIPT_HOST(script_name) then
+        return true
     end
 
-    REQUEST_FMMC_SCRIPT_HOST(mission_script)
+    network.force_script_host(script_name)
 
+    local timeout = 2
+    local start_time = os.time()
+
+    while not FM_MISSION_CONTROLLER.IS_SCRIPT_HOST(script_name) do
+        if os.time() - start_time > timeout then
+            break
+        end
+        network.force_script_host(script_name)
+        script_util:yield()
+    end
+
+    return FM_MISSION_CONTROLLER.IS_SCRIPT_HOST(script_name)
+end
+
+function FM_MISSION_CONTROLLER.RUN(func)
+    script.run_in_fiber(function(script_util)
+        local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
+        if mission_script == nil then return end
+
+        if not FM_MISSION_CONTROLLER.REQUEST_SCRIPT_HOST(mission_script, script_util) then
+            return
+        end
+
+        script.execute_as_script(mission_script, function()
+            func(mission_script)
+        end)
+    end)
+end
+
+function FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
     for i = 0, 5 do
         local tl23NextContentID = GLOBAL_GET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6)
         if tl23NextContentID ~= "" then
@@ -629,21 +682,35 @@ local function INSTANT_FINISH_FM_MISSION_CONTROLLER()
         end
     end
 
+    LOCAL_SET_INT(script_name, Locals[script_name].iNextMission, 5)
+
     if GLOBAL_GET_BOOL(sStrandMissionData.bIsThisAStrandMission) then
         GLOBAL_SET_BOOL(sStrandMissionData.bPassedFirstMission, true)
         GLOBAL_SET_BOOL(sStrandMissionData.bPassedFirstStrandNoReset, true)
         GLOBAL_SET_BOOL(sStrandMissionData.bLastMission, true)
     end
-    --LOCAL_SET_INT(mission_script, Locals[mission_script].iNextMission, 5)
 
-    LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
+    LOCAL_SET_BIT(script_name, Locals[script_name].iLocalBoolCheck11, 7)
 
     for i = 0, 3 do
-        LOCAL_SET_INT(mission_script, Locals[mission_script].iTeamScore + i, 999999)
+        LOCAL_SET_INT(script_name, Locals[script_name].iTeamScore + i, 999999)
     end
 
-    LOCAL_SET_BITS(mission_script, Locals[mission_script].iServerBitSet, 9, 10, 11, 12, 16)
+    LOCAL_SET_BITS(script_name, Locals[script_name].iServerBitSet, 9, 10, 11, 12, 16)
 end
+
+local function IS_PLAYER_NEAR_HEIST_PLANNING_BOARD()
+    if GLOBAL_GET_INT(g_HeistSharedClient.PlanningBoardIndex) == 0 then
+        return false
+    end
+
+    local playerPos = ENTITY.GET_ENTITY_COORDS(PLAYER.PLAYER_PED_ID())
+    local boardPos = GLOBAL_GET_VECTOR3(g_HeistSharedClient.vBoardPosition)
+
+    return MISC.GET_DISTANCE_BETWEEN_COORDS(playerPos.x, playerPos.y, playerPos.z,
+        boardPos.x, boardPos.y, boardPos.z, true) < 3.5 -- HEIST_CUTSCENE_TRIGGER_m
+end
+
 
 --#endregion
 
@@ -720,7 +787,7 @@ script.run_in_fiber(function()
 
 
     menu_root:add_text("支持的GTA版本: " .. SUPPORT_GAME_VERSION)
-    menu_root:add_text("当前GTA版本: " .. CURRENT_GAME_VERSION)
+    menu_root:add_text("当前的GTA版本: " .. CURRENT_GAME_VERSION)
 
     local status_text = "支持"
     if SUPPORT_GAME_VERSION ~= CURRENT_GAME_VERSION then
@@ -966,32 +1033,51 @@ menu_mission:add_sameline()
 MenuHMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
 
 menu_mission:add_button("直接完成任务 (通用)", function()
-    script.run_in_fiber(function()
-        INSTANT_FINISH_FM_MISSION_CONTROLLER()
+    FM_MISSION_CONTROLLER.RUN(function(script_name)
+        FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
     end)
 end)
 menu_mission:add_sameline()
 menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问题)", function()
-    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
-    if mission_script ~= nil then
-        REQUEST_FMMC_SCRIPT_HOST(mission_script)
+    FM_MISSION_CONTROLLER.RUN(function(mission_script)
         LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
-    end
+    end)
 end)
 
 MenuHMission["DisableMissionAggroFail"] = menu_mission:add_checkbox("禁止因触发惊动而任务失败")
 menu_mission:add_sameline()
-MenuHMission["DisableMissionFail"] = menu_mission:add_checkbox("禁止任务失败")
+MenuHMission["DisableMissionFail"] = menu_mission:add_checkbox("禁止任务失败 (仅单人可用)")
 menu_mission:add_sameline()
 menu_mission:add_button("允许任务失败", function()
     MenuHMission["DisableMissionFail"]:set_enabled(false)
 
-    local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
-    if mission_script ~= nil then
-        REQUEST_FMMC_SCRIPT_HOST(mission_script)
+    FM_MISSION_CONTROLLER.RUN(function(mission_script)
         LOCAL_CLEAR_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
-    end
+    end)
 end)
+
+MenuHMission["ObjectiveTimeLimit"] = menu_mission:add_input_int("任务剩余时间")
+menu_mission:add_button("设置任务剩余时间", function()
+    local value = MenuHMission["ObjectiveTimeLimit"]:get_value()
+    if value < 0 then
+        value = 0
+    elseif value > 9999 then
+        value = 9999
+    end
+    MenuHMission["ObjectiveTimeLimit"]:set_value(value)
+
+    FM_MISSION_CONTROLLER.RUN(function(mission_script)
+        local team = PLAYER.GET_PLAYER_TEAM(PLAYER.PLAYER_ID())
+
+        LOCAL_SET_INT(mission_script, Locals[mission_script].iMultiObjectiveTimeLimit + team, value * 60 * 1000)
+    end)
+end)
+menu_mission:add_sameline()
+menu_mission:add_text("(单位: 分钟, 右下角的剩余时间倒计时)")
+menu_mission:add_sameline()
+MenuHMission["LockObjectiveLimitTimer"] = menu_mission:add_checkbox("锁定任务剩余时间")
+
+
 
 --------------------------------
 -- Launch Mission
@@ -1216,9 +1302,9 @@ menu_mission:add_button("启动差事: 公寓抢劫任务 终章", function()
         notify("启动差事", "你需要在公寓内部")
         return
     end
-    if not IS_PLAYER_IN_APARTMENT_PLANNING_ROOM() then
-        notify("启动差事", "你可能没有在抢劫计划面板附近")
-        -- return
+    if not IS_PLAYER_NEAR_HEIST_PLANNING_BOARD() then
+        notify("启动差事", "你需要在抢劫计划面板附近")
+        return
     end
 
     local ContentID = apartment_heist_final_content[apartment_heist_final_select]
@@ -1822,7 +1908,7 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
                         GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_FENCING_FEE"], 0)
                         GLOBAL_SET_FLOAT(Tunables["IH_DEDUCTION_PAVEL_CUT"], 0)
                     end
-                    INSTANT_FINISH_FM_MISSION_CONTROLLER()
+                    FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
 
                     GLOBAL_SET_BOOL(bTransitionSessionSkipLbAndNjvs, true)
 
@@ -1948,7 +2034,7 @@ AutoApartmentHeist.button = menu_automation:add_button("开启 全自动公寓�
         AutoApartmentHeist.notify("你需要在公寓内部")
         return
     end
-    if not IS_PLAYER_IN_APARTMENT_PLANNING_ROOM() then
+    if not IS_PLAYER_NEAR_HEIST_PLANNING_BOARD() then
         AutoApartmentHeist.notify("你需要在抢劫计划面板附近")
         return
     end
@@ -2045,7 +2131,7 @@ script.register_looped("RS_Missions.AutoApartmentHeist", function(script_util)
                     script_util:sleep(setting.delay + 1000)
 
                     AutoApartmentHeist.processHeistAward()
-                    INSTANT_FINISH_FM_MISSION_CONTROLLER()
+                    FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
 
                     AutoApartmentHeist.notify("直接完成任务...")
                     AutoApartmentHeist.setStatus(AutoApartmentHeistStatus.MissionEnd)
@@ -2138,19 +2224,30 @@ script.register_looped("RS_Missions.Main", function()
     end
 
     if MenuHMission["DisableMissionAggroFail"]:is_enabled() then
-        local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
-        if mission_script ~= nil then
-            REQUEST_FMMC_SCRIPT_HOST(mission_script)
+        FM_MISSION_CONTROLLER.RUN(function(mission_script)
             LOCAL_CLEAR_BITS(mission_script, Locals[mission_script].iServerBitSet1, 24, 28)
-        end
+        end)
     end
 
     if MenuHMission["DisableMissionFail"]:is_enabled() then
-        local mission_script = GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
-        if mission_script ~= nil then
-            REQUEST_FMMC_SCRIPT_HOST(mission_script)
+        FM_MISSION_CONTROLLER.RUN(function(mission_script)
             LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
-        end
+        end)
+    end
+
+    if MenuHMission["LockObjectiveLimitTimer"]:is_enabled() then
+        FM_MISSION_CONTROLLER.RUN(function(mission_script)
+            local team = PLAYER.GET_PLAYER_TEAM(PLAYER.PLAYER_ID())
+
+            if LOCAL_GET_BOOL(mission_script, Locals[mission_script].tdObjectiveLimitTimer + team * 2 + 1) then
+                LOCAL_SET_INT(mission_script, Locals[mission_script].tdObjectiveLimitTimer + team * 2,
+                    NETWORK.GET_NETWORK_TIME())
+            end
+            if LOCAL_GET_BOOL(mission_script, Locals[mission_script].tdMultiObjectiveLimitTimer + team * 2 + 1) then
+                LOCAL_SET_INT(mission_script, Locals[mission_script].tdMultiObjectiveLimitTimer + team * 2,
+                    NETWORK.GET_NETWORK_TIME())
+            end
+        end)
     end
 
     if MenuMisc["DisableStatCapCheck"]:is_enabled() then
