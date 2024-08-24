@@ -20,8 +20,15 @@ local function print(text)
     log.info(tostring(text))
 end
 
-local function get_label_text(label)
-    return HUD.GET_FILENAME_FOR_AUDIO_CONVERSATION(label)
+local function get_label_text(labelName)
+    local text = HUD.GET_FILENAME_FOR_AUDIO_CONVERSATION(labelName)
+    if text == "" or text == "NULL" then
+        return text
+    end
+
+    text = string.gsub(text, "~n~", "\n")
+    text = string.gsub(text, "µ", " ")
+    return text
 end
 
 --------------------------------
@@ -770,13 +777,93 @@ local Tables <const> = {
         [4] = { "MPPLY_HEIST_1STPERSON_PROG", "MPPLY_AWD_COMPLET_HEIST_1STPER" },
         [5] = { "MPPLY_HEISTMEMBERPROGRESSBITSET", "MPPLY_AWD_COMPLET_HEIST_MEM" }
     },
+
+
+    ------------------------
+    -- Business
+    ------------------------
+
+    NightclubGoodsName = {
+        [0] = get_label_text("CLUB_STOCK0"), -- Cargo and Shipments
+        [1] = get_label_text("CLUB_STOCK1"), -- Sporting Goods
+        [2] = get_label_text("CLUB_STOCK2"), -- South American Imports
+        [3] = get_label_text("CLUB_STOCK3"), -- Pharmaceutical Research
+        [4] = get_label_text("CLUB_STOCK4"), -- Organic Produce
+        [5] = get_label_text("CLUB_STOCK5"), -- Printing & Copying
+        [6] = get_label_text("CLUB_STOCK6")  -- Cash Creation
+    },
+    BikerFactoryName = {
+        [0] = get_label_text("BKR_FACTORY_0"), -- Document Forgery Office
+        [1] = get_label_text("BKR_FACTORY_1"), -- Weed Farm
+        [2] = get_label_text("BKR_FACTORY_2"), -- Counterfeit Cash Factory
+        [3] = get_label_text("BKR_FACTORY_3"), -- Meth Lab
+        [4] = get_label_text("BKR_FACTORY_4")  -- Cocaine Lockup
+    },
+    BikerFactoryType = {
+        -- [FACTORY_ID]
+        [1]  = 3, -- FACTORY_TYPE_METH
+        [2]  = 1, -- FACTORY_TYPE_WEED
+        [3]  = 4, -- FACTORY_TYPE_CRACK
+        [4]  = 2, -- FACTORY_TYPE_FAKE_MONEY
+        [5]  = 0, -- FACTORY_TYPE_FAKE_IDS
+
+        [6]  = 3,
+        [7]  = 1,
+        [8]  = 4,
+        [9]  = 2,
+        [10] = 0,
+
+        [11] = 3,
+        [12] = 1,
+        [13] = 4,
+        [14] = 2,
+        [15] = 0,
+
+        [16] = 3,
+        [17] = 1,
+        [18] = 4,
+        [19] = 2,
+        [20] = 0
+    },
+    HangarGoodsName = {
+        [0] = get_label_text("HAN_CRG_ANIMAL"), -- Animal Materials
+        [1] = get_label_text("HAN_CRG_ART"),    -- Art & Antiques
+        [2] = get_label_text("HAN_CRG_CHEMS"),  -- Chemicals
+        [3] = get_label_text("HAN_CRG_GOODS"),  -- Counterfeit Goods
+        [4] = get_label_text("HAN_CRG_JEWEL"),  -- Jewelry & Gemstones
+        [5] = get_label_text("HAN_CRG_MEDS"),   -- Medical Supplies
+        [6] = get_label_text("HAN_CRG_NARC"),   -- Narcotics
+        [7] = get_label_text("HAN_CRG_TOBAC"),  -- Tobacco & Alcohol
+        -- [8] = get_label_text("HAN_CRG_MIXED"),  -- Cargo
+    },
+    HangaModelIndexGoodType = {
+        [1] = 5,
+        [2] = 5,
+        [3] = 7,
+        [4] = 7,
+        [5] = 1,
+        [6] = 1,
+        [7] = 6,
+        [8] = 6,
+        [9] = 4,
+        [10] = 4,
+        [11] = 0,
+        [12] = 0,
+        [13] = 3,
+        [14] = 3,
+        [15] = 2,
+        [16] = 2,
+    },
+
 }
 
+local PACKED_MP_INT_HANGAR_PRODUCT_0 <const> = 16011
 
 
-----------------------------------------
--- Menu: Main
-----------------------------------------
+
+--------------------------------------------------------
+--                MAIN MENU
+--------------------------------------------------------
 
 local menu_root <const> = gui.add_tab("RS Missions")
 
@@ -798,9 +885,279 @@ end)
 
 
 
-----------------------------------------
--- Menu: Freemode Mission
-----------------------------------------
+
+--------------------------------------------------------
+--                BUSINESS MONITOR
+--------------------------------------------------------
+
+local menu_business_monitor <const> = menu_root:add_tab("[RSM] 资产监视")
+
+local BusinessMonitor = {
+    Caps = {
+        Nightclub = {
+            [0] = 50,  -- Cargo
+            [1] = 100, -- Weapons
+            [2] = 10,  -- Cocaine
+            [3] = 20,  -- Meth
+            [4] = 80,  -- Weed
+            [5] = 60,  -- Forgery
+            [6] = 40   -- Cash
+        },
+        Biker = {
+            [0] = 60, -- Forgery
+            [1] = 80, -- Weed
+            [2] = 40, -- Cash
+            [3] = 20, -- Meth
+            [4] = 10  -- Cocaine
+        },
+        Bunker = {
+            product = 100,
+            research = 60
+        },
+        AcidLab = 160,
+        Warehouse = {
+            [1]  = 16,  -- "MP_WHOUSE_0",
+            [2]  = 16,  -- "MP_WHOUSE_1",
+            [3]  = 16,  -- "MP_WHOUSE_2",
+            [4]  = 16,  -- "MP_WHOUSE_3",
+            [5]  = 16,  -- "MP_WHOUSE_4",
+            [6]  = 111, -- "MP_WHOUSE_5",
+            [7]  = 42,  -- "MP_WHOUSE_6",
+            [8]  = 111, -- "MP_WHOUSE_7",
+            [9]  = 16,  -- "MP_WHOUSE_8",
+            [10] = 42,  -- "MP_WHOUSE_9",
+            [11] = 42,  -- "MP_WHOUSE_10",
+            [12] = 42,  -- "MP_WHOUSE_11",
+            [13] = 42,  -- "MP_WHOUSE_12",
+            [14] = 42,  -- "MP_WHOUSE_13",
+            [15] = 42,  -- "MP_WHOUSE_14",
+            [16] = 111, -- "MP_WHOUSE_15",
+            [17] = 111, -- "MP_WHOUSE_16",
+            [18] = 111, -- "MP_WHOUSE_17",
+            [19] = 111, -- "MP_WHOUSE_18",
+            [20] = 111, -- "MP_WHOUSE_19",
+            [21] = 42,  -- "MP_WHOUSE_20",
+            [22] = 111, -- "MP_WHOUSE_21",
+        },
+        Hangar = 50,
+    },
+
+    SafeCash = {
+        {
+            name = "夜总会",
+            stat = "MPX_CLUB_SAFE_CASH_VALUE",
+            cap = 250000
+        },
+        {
+            name = "游戏厅",
+            stat = "MPX_ARCADE_SAFE_CASH_VALUE",
+            cap = 100000
+        },
+        {
+            name = "事务所",
+            stat = "MPX_FIXER_SAFE_CASH_VALUE",
+            cap = 250000
+        },
+        {
+            name = "摩托帮会所",
+            stat = "MPX_BIKER_BAR_RESUPPLY_CASH",
+            cap = 100000
+        },
+        {
+            name = "回收站",
+            stat = "MPX_SALVAGE_SAFE_CASH_VALUE",
+            cap = 250000
+        },
+    }
+}
+
+menu_business_monitor:add_imgui(function()
+    if not IS_IN_SESSION() then
+        ImGui.Text("仅在线上模式战局内可用")
+        return
+    end
+
+
+    -- Safe Cash
+    ImGui.SeparatorText("保险箱")
+    for _, item in pairs(BusinessMonitor.SafeCash) do
+        local safe_cash = stats.get_int(item.stat)
+        local text = item.name .. ": " .. safe_cash
+        if safe_cash >= item.cap then
+            text = text .. " [!!]"
+        end
+        ImGui.Text(text)
+    end
+
+
+    -- Nightclub
+    if stats.get_int("MPX_NIGHTCLUB_OWNED") > 0 then
+        ImGui.SeparatorText("夜总会")
+
+        local popularity = math.floor(stats.get_int("MPX_CLUB_POPULARITY") / 10)
+        ImGui.Text("人气: " .. popularity .. "%")
+
+        for i = 0, 6 do
+            local name = Tables.NightclubGoodsName[i]
+            local product = stats.get_int("MPX_HUB_PROD_TOTAL_" .. i)
+            local cap = BusinessMonitor.Caps.Nightclub[i]
+
+            local text = name .. ": " .. product .. "/" .. cap
+            if product >= cap then
+                text = text .. " [!!]"
+            end
+            ImGui.Text(text)
+        end
+    end
+
+
+    -- Bunker
+    if stats.get_int("MPX_FACTORYSLOT5") > 0 then
+        ImGui.SeparatorText("地堡")
+
+        local supply = stats.get_int("MPX_MATTOTALFORFACTORY5")
+        ImGui.Text("原材料: " .. supply .. "%")
+        ImGui.SameLine(220)
+
+        local product = stats.get_int("MPX_PRODTOTALFORFACTORY5")
+        local cap = BusinessMonitor.Caps.Bunker.product
+        local text = "货物: " .. product .. "/" .. cap
+        if product >= cap then
+            text = text .. " [!!]"
+        end
+        ImGui.Text(text)
+        ImGui.SameLine(360)
+
+        local research = stats.get_int("MPX_RESEARCHTOTALFORFACTORY5")
+        local cap = BusinessMonitor.Caps.Bunker.research
+        local text = "研究: " .. research .. "/" .. cap
+        ImGui.Text(text)
+    end
+
+
+    -- Acid Lab
+    if stats.get_int("MPX_XM22_LAB_OWNED") == -1576586413 then
+        ImGui.SeparatorText("致幻剂实验室")
+
+        local supply = stats.get_int("MPX_MATTOTALFORFACTORY6")
+        ImGui.Text("原材料: " .. supply .. "%")
+        ImGui.SameLine(220)
+
+        local product = stats.get_int("MPX_PRODTOTALFORFACTORY6")
+        local cap = BusinessMonitor.Caps.AcidLab
+        local text = "货物: " .. product .. "/" .. cap
+        if product >= cap then
+            text = text .. " [!!]"
+        end
+        ImGui.Text(text)
+    end
+
+
+    -- Biker
+    if stats.get_int("MPX_PROP_CLUBHOUSE") > 0 then
+        ImGui.SeparatorText("摩托帮")
+
+        for i = 0, 4 do
+            local factory_id = stats.get_int("MPX_FACTORYSLOT" .. i)
+            if factory_id > 0 then
+                local factory_type = Tables.BikerFactoryType[factory_id]
+
+                local factory_name = Tables.BikerFactoryName[factory_type]
+                ImGui.Text(factory_name)
+                ImGui.SameLine(220)
+
+                local supply = stats.get_int("MPX_MATTOTALFORFACTORY" .. i)
+                ImGui.Text("原材料: " .. supply .. "%")
+                ImGui.SameLine(360)
+
+                local product = stats.get_int("MPX_PRODTOTALFORFACTORY" .. i)
+                local cap = BusinessMonitor.Caps.Biker[factory_type]
+                local text = "货物: " .. product .. "/" .. cap
+                if product >= cap then
+                    text = text .. " [!!]"
+                end
+                ImGui.Text(text)
+            end
+        end
+    end
+
+
+    -- Special Cargo
+    if stats.get_int("MPX_PROP_OFFICE") > 0 then
+        ImGui.SeparatorText("CEO 特种货物")
+
+        for i = 0, 4 do
+            local warehouse_id = stats.get_int("MPX_FACTORYSLOT" .. i)
+            if warehouse_id > 0 then
+                local warehouse_name = get_label_text("MP_WHOUSE_" .. warehouse_id - 1)
+                ImGui.Text(warehouse_name)
+                ImGui.SameLine(220)
+
+                local special_item = stats.get_int("MPX_SPCONTOTALFORWHOUSE" .. i)
+                ImGui.Text("特殊物品: " .. special_item)
+                ImGui.SameLine(360)
+
+                local special_crate = stats.get_int("MPX_CONTOTALFORWHOUSE" .. i)
+                local warehouse_cap = BusinessMonitor.Caps.Warehouse[warehouse_id]
+                local text = "货物总数: " .. special_crate .. "/" .. warehouse_cap
+                if special_crate >= warehouse_cap then
+                    text = "[!!] " .. text
+                end
+                ImGui.Text(text)
+            end
+        end
+    end
+
+
+    -- Hangar
+    if stats.get_int("MPX_HANGAR_OWNED") > 0 then
+        ImGui.SeparatorText("机库")
+
+        local product = stats.get_int("MPX_HANGAR_CONTRABAND_TOTAL")
+        local cap = BusinessMonitor.Caps.Hangar
+        local text = "货物总数: " .. product .. "/" .. cap
+        if product >= cap then
+            text = text .. " [!!]"
+        end
+        ImGui.Text(text)
+
+
+        local hangar_products = {
+            [0] = 0,
+            [1] = 0,
+            [2] = 0,
+            [3] = 0,
+            [4] = 0,
+            [5] = 0,
+            [6] = 0,
+            [7] = 0
+        }
+        for slot = 0, 49 do
+            local model_index = stats.get_packed_stat_int(PACKED_MP_INT_HANGAR_PRODUCT_0 + slot)
+            if model_index > 0 then
+                local good_type = Tables.HangaModelIndexGoodType[model_index]
+                hangar_products[good_type] = hangar_products[good_type] + 1
+            end
+        end
+        for i = 0, 7 do
+            local name = Tables.HangarGoodsName[i]
+            ImGui.Text(name .. ": " .. hangar_products[i])
+        end
+    end
+
+
+    ImGui.Spacing()
+    ImGui.Separator()
+    local formatted_date = os.date("%Y-%m-%d %H:%M:%S", os.time())
+    ImGui.Text("当前时间：" .. formatted_date)
+end)
+
+
+
+
+--------------------------------------------------------
+--                FREEMODE MISSION
+--------------------------------------------------------
 
 local menu_feemode_mission <const> = menu_root:add_tab("[RSM] 自由模式任务")
 
@@ -1010,11 +1367,9 @@ end)
 
 
 
-
-
-----------------------------------------
--- Menu: Heist Mission
-----------------------------------------
+--------------------------------------------------------
+--                HEIST MISSION
+--------------------------------------------------------
 
 local menu_mission <const> = menu_root:add_tab("[RSM] 抢劫任务")
 
@@ -1495,11 +1850,9 @@ menu_mission:add_text("数值为0, 则不进行限制; 限制最低收入后, �
 
 
 
-
-
-----------------------------------------
--- Menu: Automation
-----------------------------------------
+--------------------------------------------------------
+--                AUTOMATIC HEIST
+--------------------------------------------------------
 
 local menu_automation <const> = menu_root:add_tab("[RSM] 自动化任务")
 
@@ -2154,10 +2507,9 @@ end)
 
 
 
-
-----------------------------------------
--- Menu: Misc
-----------------------------------------
+--------------------------------------------------------
+--                MISC MENU
+--------------------------------------------------------
 
 local menu_misc <const> = menu_root:add_tab("[RSM] 其它")
 
