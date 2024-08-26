@@ -31,6 +31,22 @@ local function get_label_text(labelName)
     return text
 end
 
+local function get_input_value(input, min_value, max_value)
+    local input_value = input:get_value()
+
+    if input_value < min_value then
+        input:set_value(min_value)
+        return min_value
+    end
+
+    if input_value > max_value then
+        input:set_value(max_value)
+        return max_value
+    end
+
+    return input_value
+end
+
 --------------------------------
 -- Global Functions
 --------------------------------
@@ -555,8 +571,8 @@ local function LAUNCH_MISSION(Data)
     GLOBAL_SET_STRING(g_sTransitionSessionData + 863, tlName)
     GLOBAL_SET_INT(g_sTransitionSessionData + 42, iMaxPlayers)
     GLOBAL_CLEAR_BIT(g_sTransitionSessionData + 2, 14)
-    GLOBAL_SET_BIT(g_sTransitionSessionData, 5)
-    GLOBAL_SET_BIT(g_sTransitionSessionData, 8)
+    -- GLOBAL_SET_BIT(g_sTransitionSessionData, 5)
+    -- GLOBAL_SET_BIT(g_sTransitionSessionData, 8)
     GLOBAL_CLEAR_BIT(g_sTransitionSessionData, 7)
     GLOBAL_CLEAR_BIT(g_sTransitionSessionData, 15)
     GLOBAL_SET_INT(g_sTransitionSessionData + 719, 1)
@@ -968,6 +984,11 @@ local BusinessMonitor = {
             stat = "MPX_SALVAGE_SAFE_CASH_VALUE",
             cap = 250000
         },
+        {
+            name = "保金办公室",
+            stat = "MPX_BAIL_SAFE_CASH_VALUE",
+            cap = 100000
+        }
     }
 }
 
@@ -986,7 +1007,7 @@ menu_business_monitor:add_imgui(function()
         if safe_cash >= item.cap then
             text = text .. " [!!]"
         end
-        ImGui.Text(text)
+        ImGui.BulletText(text)
     end
 
 
@@ -995,7 +1016,7 @@ menu_business_monitor:add_imgui(function()
         ImGui.SeparatorText("夜总会")
 
         local popularity = math.floor(stats.get_int("MPX_CLUB_POPULARITY") / 10)
-        ImGui.Text("人气: " .. popularity .. "%")
+        ImGui.BulletText("人气: " .. popularity .. "%")
 
         for i = 0, 6 do
             local name = Tables.NightclubGoodsName[i]
@@ -1006,7 +1027,7 @@ menu_business_monitor:add_imgui(function()
             if product >= cap then
                 text = text .. " [!!]"
             end
-            ImGui.Text(text)
+            ImGui.BulletText(text)
         end
     end
 
@@ -1014,6 +1035,8 @@ menu_business_monitor:add_imgui(function()
     -- Bunker
     if stats.get_int("MPX_FACTORYSLOT5") > 0 then
         ImGui.SeparatorText("地堡")
+
+        ImGui.Bullet()
 
         local supply = stats.get_int("MPX_MATTOTALFORFACTORY5")
         ImGui.Text("原材料: " .. supply .. "%")
@@ -1039,6 +1062,8 @@ menu_business_monitor:add_imgui(function()
     if stats.get_int("MPX_XM22_LAB_OWNED") == -1576586413 then
         ImGui.SeparatorText("致幻剂实验室")
 
+        ImGui.Bullet()
+
         local supply = stats.get_int("MPX_MATTOTALFORFACTORY6")
         ImGui.Text("原材料: " .. supply .. "%")
         ImGui.SameLine(220)
@@ -1063,7 +1088,7 @@ menu_business_monitor:add_imgui(function()
                 local factory_type = Tables.BikerFactoryType[factory_id]
 
                 local factory_name = Tables.BikerFactoryName[factory_type]
-                ImGui.Text(factory_name)
+                ImGui.BulletText(factory_name)
                 ImGui.SameLine(220)
 
                 local supply = stats.get_int("MPX_MATTOTALFORFACTORY" .. i)
@@ -1087,10 +1112,10 @@ menu_business_monitor:add_imgui(function()
         ImGui.SeparatorText("CEO 特种货物")
 
         for i = 0, 4 do
-            local warehouse_id = stats.get_int("MPX_FACTORYSLOT" .. i)
+            local warehouse_id = stats.get_int("MPX_PROP_WHOUSE_SLOT" .. i)
             if warehouse_id > 0 then
                 local warehouse_name = get_label_text("MP_WHOUSE_" .. warehouse_id - 1)
-                ImGui.Text(warehouse_name)
+                ImGui.BulletText(warehouse_name)
                 ImGui.SameLine(220)
 
                 local special_item = stats.get_int("MPX_SPCONTOTALFORWHOUSE" .. i)
@@ -1101,7 +1126,7 @@ menu_business_monitor:add_imgui(function()
                 local warehouse_cap = BusinessMonitor.Caps.Warehouse[warehouse_id]
                 local text = "货物总数: " .. special_crate .. "/" .. warehouse_cap
                 if special_crate >= warehouse_cap then
-                    text = "[!!] " .. text
+                    text = text .. " [!!]"
                 end
                 ImGui.Text(text)
             end
@@ -1119,7 +1144,7 @@ menu_business_monitor:add_imgui(function()
         if product >= cap then
             text = text .. " [!!]"
         end
-        ImGui.Text(text)
+        ImGui.BulletText(text)
 
 
         local hangar_products = {
@@ -1141,7 +1166,7 @@ menu_business_monitor:add_imgui(function()
         end
         for i = 0, 7 do
             local name = Tables.HangarGoodsName[i]
-            ImGui.Text(name .. ": " .. hangar_products[i])
+            ImGui.BulletText(name .. ": " .. hangar_products[i])
         end
     end
 
@@ -1166,24 +1191,57 @@ menu_feemode_mission:add_text("*所有功能均在单人战局测试可用*")
 
 menu_feemode_mission:add_text("<<  启动任务  >>")
 
-local freemode_mission_select = 0
-menu_feemode_mission:add_imgui(function()
-    freemode_mission_select, clicked = ImGui.Combo("选择自由模式任务", freemode_mission_select, {
-        "安保合约 (富兰克林)", "电话暗杀 (富兰克林)", "蠢人帮差事 (达克斯)", "赌场工作 (贝克女士)", "藏匿屋"
-    }, 5, 5)
-end)
-
-local FMMC_TYPE <const> = {
-    [0] = 263,
-    [1] = 262,
-    [2] = 307,
-    [3] = 243,
-    [4] = 308
+local freemode_mission_list = {
+    { 263, "安保合约 (富兰克林)" },
+    { 262, "电话暗杀 (富兰克林)" },
+    { 307, "蠢人帮差事 (达克斯)" },
+    { 243, "赌场工作 (贝克女士)" },
+    { 308, "藏匿屋" },
+    { 295, "出口混合货物 (办公室)" },
+    { 296, "武装国度合约 (地堡)" },
+    { 298, "请求地堡研究 (14号探员)" },
+    { 301, "请求夜总会货物 (尤汗)" },
+    { 317, "LSA 行动 (复仇者)" },
+    { 337, "保金办公室悬赏目标" },
+    { 338, "玛德拉索雇凶" },
+    { 339, "派遣工作" },
 }
 
-menu_feemode_mission:add_button("启动 自由模式任务", function()
-    BROADCAST_GB_BOSS_WORK_REQUEST_SERVER(FMMC_TYPE[freemode_mission_select])
+local freemode_mission = {
+    fmmc_type = {},
+    mission_list = {},
+
+    mission_select = 0,
+}
+
+for key, item in pairs(freemode_mission_list) do
+    freemode_mission.fmmc_type[key] = item[1]
+    freemode_mission.mission_list[key] = item[2]
+end
+
+menu_feemode_mission:add_imgui(function()
+    freemode_mission.mission_select, clicked = ImGui.Combo("选择自由模式任务", freemode_mission.mission_select,
+        freemode_mission.mission_list, 13, 5)
 end)
+freemode_mission.mission_variation = menu_feemode_mission:add_input_int("Mission Variation [-1 ~ 99]")
+freemode_mission.mission_variation:set_value(-1)
+
+menu_feemode_mission:add_button("启动 自由模式任务", function()
+    script.run_in_fiber(function()
+        local iMission = freemode_mission.fmmc_type[freemode_mission.mission_select + 1]
+        local iVariation = get_input_value(freemode_mission.mission_variation, -1, 99)
+
+        network.trigger_script_event(1 << PLAYER.PLAYER_ID(), {
+            1450115979, -- GB_NON_BOSS_CHALLENGE_REQUEST
+            PLAYER.PLAYER_ID(),
+            -1,
+            iMission,
+            iVariation
+        })
+    end)
+end)
+menu_feemode_mission:add_sameline()
+menu_feemode_mission:add_text("部分任务需要注册为老大才可以开启")
 
 
 menu_feemode_mission:add_separator()
@@ -1242,13 +1300,15 @@ end)
 
 menu_feemode_mission:add_text("")
 
-menu_feemode_mission:add_button("直接完成 fm_content_xx 自由模式任务", function()
-    for _, item in pairs(fm_content_xxx) do
-        if IS_SCRIPT_RUNNING(item.script) then
-            LOCAL_SET_BIT(item.script, item.iGenericBitset + 1 + 0, 11)
-            LOCAL_SET_INT(item.script, item.eEndReason, 3)
+menu_feemode_mission:add_button("直接完成 fm_content 自由模式任务", function()
+    script.run_in_fiber(function()
+        for _, item in pairs(fm_content_xxx) do
+            if IS_SCRIPT_RUNNING(item.script) then
+                LOCAL_SET_BIT(item.script, item.iGenericBitset + 1 + 0, 11)
+                LOCAL_SET_INT(item.script, item.eEndReason, 3)
+            end
         end
-    end
+    end)
 end)
 menu_feemode_mission:add_text("可以完成大部分的自由模式任务，但部分任务并不会判定任务成功")
 
@@ -1291,26 +1351,28 @@ local TimeTrialParTime = {
     [31] = 130000
 }
 menu_feemode_mission:add_button("直接完成 时间挑战赛", function()
-    local script_name = "freemode"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-
-    if LOCAL_GET_INT(script_name, TTVarsStruct.eAMTT_Stage) == 3 then -- AMTT_GOTO
-        local iVariation = LOCAL_GET_INT(script_name, TTVarsStruct.iVariation)
-        local iParTime = TimeTrialParTime[iVariation]
-        if iParTime == nil then
-            iParTime = 1000 -- 1s
-        else
-            iParTime = iParTime - 1000
+    script.run_in_fiber(function()
+        local script_name = "freemode"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
         end
-        local iStartTime = NETWORK.GET_NETWORK_TIME() - iParTime
 
-        network.force_script_host(script_name)
+        if LOCAL_GET_INT(script_name, TTVarsStruct.eAMTT_Stage) == 3 then -- AMTT_GOTO
+            local iVariation = LOCAL_GET_INT(script_name, TTVarsStruct.iVariation)
+            local iParTime = TimeTrialParTime[iVariation]
+            if iParTime == nil then
+                iParTime = 1000 -- 1s
+            else
+                iParTime = iParTime - 1000
+            end
+            local iStartTime = NETWORK.GET_NETWORK_TIME() - iParTime
 
-        LOCAL_SET_INT(script_name, TTVarsStruct.trialTimer, iStartTime)
-        LOCAL_SET_INT(script_name, TTVarsStruct.eAMTT_Stage, 4) -- AMTT_END
-    end
+            network.force_script_host(script_name)
+
+            LOCAL_SET_INT(script_name, TTVarsStruct.trialTimer, iStartTime)
+            LOCAL_SET_INT(script_name, TTVarsStruct.eAMTT_Stage, 4) -- AMTT_END
+        end
+    end)
 end)
 
 menu_feemode_mission:add_sameline()
@@ -1332,26 +1394,28 @@ local RCTimeTrialParTime = {
     [13] = 82000,
 }
 menu_feemode_mission:add_button("直接完成 RC匪徒时间挑战赛", function()
-    local script_name = "freemode"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-
-    if LOCAL_GET_INT(script_name, RCTTVarsStruct.eRunStage) == 4 then -- ARS_TRIAL
-        local eVariation = LOCAL_GET_INT(script_name, RCTTVarsStruct.eVariation)
-        local iParTime = RCTimeTrialParTime[eVariation]
-        if iParTime == nil then
-            iParTime = 1000 -- 1s
-        else
-            iParTime = iParTime - 1000
+    script.run_in_fiber(function()
+        local script_name = "freemode"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
         end
-        local iStartTime = NETWORK.GET_NETWORK_TIME() - iParTime
 
-        network.force_script_host(script_name)
+        if LOCAL_GET_INT(script_name, RCTTVarsStruct.eRunStage) == 4 then -- ARS_TRIAL
+            local eVariation = LOCAL_GET_INT(script_name, RCTTVarsStruct.eVariation)
+            local iParTime = RCTimeTrialParTime[eVariation]
+            if iParTime == nil then
+                iParTime = 1000 -- 1s
+            else
+                iParTime = iParTime - 1000
+            end
+            local iStartTime = NETWORK.GET_NETWORK_TIME() - iParTime
 
-        LOCAL_SET_INT(script_name, RCTTVarsStruct.timerTrial, iStartTime)
-        LOCAL_SET_INT(script_name, RCTTVarsStruct.eRunStage, 6) -- ARS_END
-    end
+            network.force_script_host(script_name)
+
+            LOCAL_SET_INT(script_name, RCTTVarsStruct.timerTrial, iStartTime)
+            LOCAL_SET_INT(script_name, RCTTVarsStruct.eRunStage, 6) -- ARS_END
+        end
+    end)
 end)
 
 
@@ -1856,23 +1920,6 @@ menu_mission:add_text("数值为0, 则不进行限制; 限制最低收入后, �
 
 local menu_automation <const> = menu_root:add_tab("[RSM] 自动化任务")
 
-local function getInputValue(input, min_value, max_value)
-    local input_value = input:get_value()
-
-    if input_value < min_value then
-        input:set_value(min_value)
-        return min_value
-    end
-
-    if input_value > max_value then
-        input:set_value(max_value)
-        return max_value
-    end
-
-    return input_value
-end
-
-
 
 
 local bTransitionSessionSkipLbAndNjvs = g_sTransitionSessionData + 702
@@ -2091,10 +2138,10 @@ AutoIslandHeist.button = menu_automation:add_button("开启 全自动佩里科�
         return
     end
 
-    AutoIslandHeist.setting.rewardValue = getInputValue(AutoIslandHeist.menu.rewardValue, 0, 2550000)
+    AutoIslandHeist.setting.rewardValue = get_input_value(AutoIslandHeist.menu.rewardValue, 0, 2550000)
     AutoIslandHeist.setting.addRandom = AutoIslandHeist.menu.addRandom:is_enabled()
     AutoIslandHeist.setting.disableCut = AutoIslandHeist.menu.disableCut:is_enabled()
-    AutoIslandHeist.setting.delay = getInputValue(AutoIslandHeist.menu.delay, 0, 5000)
+    AutoIslandHeist.setting.delay = get_input_value(AutoIslandHeist.menu.delay, 0, 5000)
 
 
     if AutoIslandHeist.setting.rewardValue > 0 then
@@ -2398,7 +2445,7 @@ AutoApartmentHeist.button = menu_automation:add_button("开启 全自动公寓�
     MenuHMission["SetMinPlayers"]:set_enabled(true)
     MenuHMission["SetMaxTeams"]:set_enabled(true)
 
-    AutoApartmentHeist.setting.delay = getInputValue(AutoApartmentHeist.menu.delay, 0, 5000)
+    AutoApartmentHeist.setting.delay = get_input_value(AutoApartmentHeist.menu.delay, 0, 5000)
 
     AutoApartmentHeist.toggleButtonName(false)
     AutoApartmentHeist.enable = true
