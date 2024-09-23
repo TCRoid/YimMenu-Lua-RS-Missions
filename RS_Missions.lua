@@ -1,8 +1,9 @@
---------------------------------
+----------------------------------------------------------------
 -- Author: Rostal
---------------------------------
+-- Github: https://github.com/TCRoid/YimMenu-Lua-RS-Missions
+----------------------------------------------------------------
 
-local SUPPORT_GAME_VERSION <const> = "1.69-3274"
+local SUPPORT_GAME_VERSION <const> = "1.69-3323"
 
 
 
@@ -41,6 +42,22 @@ local function get_input_value(input, min_value, max_value)
 
     if input_value > max_value then
         input:set_value(max_value)
+        return max_value
+    end
+
+    return input_value
+end
+
+local function check_input_value(input_value, min_value, max_value, default_value)
+    if not input_value then
+        return default_value
+    end
+
+    if input_value < min_value then
+        return min_value
+    end
+
+    if input_value > max_value then
         return max_value
     end
 
@@ -217,6 +234,10 @@ function IS_IN_SESSION()
     return NETWORK.NETWORK_IS_SESSION_STARTED() and not IS_SCRIPT_RUNNING("maintransition")
 end
 
+function CAN_LAUNCH_MISSION()
+    return not (NETWORK.NETWORK_IS_ACTIVITY_SESSION() or IS_PLAYER_IN_CORONA())
+end
+
 --------------------------------
 -- Misc Functions
 --------------------------------
@@ -288,9 +309,11 @@ local FMMC_STRUCT <const> = {
 }
 
 -- FMMC_ROCKSTAR_CREATED_STRUCT
-local g_FMMC_ROCKSTAR_CREATED <const> = 794744
-local FMMC_ROCKSTAR_CREATED <const> = {
-    sMissionHeaderVars = g_FMMC_ROCKSTAR_CREATED + 4 + 1, -- +[iArrayPos]*89
+local _g_FMMC_ROCKSTAR_CREATED <const> = 794744
+local g_FMMC_ROCKSTAR_CREATED <const> = {
+    iTotalNumMissions     = _g_FMMC_ROCKSTAR_CREATED + 2,
+    sMissionHeaderVars    = _g_FMMC_ROCKSTAR_CREATED + 4 + 1,      -- +[iArrayPos]*89
+    sDefaultCoronaOptions = _g_FMMC_ROCKSTAR_CREATED + 135107 + 1, -- +[iArrayPos]*13
 }
 
 
@@ -540,7 +563,7 @@ local Tunables <const> = {
 local g_sCURRENT_UGC_STATUS <const> = 2693440
 local g_iMissionEnteryType <const> = 1057440
 
-local function LAUNCH_MISSION(Data)
+local function _LAUNCH_MISSION(Data)
     local iArrayPos = MISC.GET_CONTENT_ID_INDEX(Data.iRootContentID)
 
     local tlName = GLOBAL_GET_STRING(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89)
@@ -613,8 +636,12 @@ local function LAUNCH_APARTMENT_HEIST(ContentID)
     GLOBAL_SET_BOOL(g_HeistPlanningClient.bHeistCoronaActive, true)
 end
 
-local function IS_PLAYER_BOSS_OF_A_GANG()
+function IS_PLAYER_BOSS_OF_A_GANG()
     return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM_3() + 10) == PLAYER.PLAYER_ID()
+end
+
+function IS_PLAYER_IN_CORONA()
+    return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193) ~= 0
 end
 
 local function COMPLETE_DAILY_CHALLENGE()
@@ -624,7 +651,7 @@ local function COMPLETE_DAILY_CHALLENGE()
 end
 
 local function COMPLETE_WEEKLY_CHALLENGE()
-    local g_sWeeklyChallenge = 2737992
+    local g_sWeeklyChallenge = 2737993
 
     GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 3, 0)
     GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 4, 0)
@@ -734,6 +761,51 @@ local function IS_PLAYER_NEAR_HEIST_PLANNING_BOARD()
         boardPos.x, boardPos.y, boardPos.z, true) < 3.5 -- HEIST_CUTSCENE_TRIGGER_m
 end
 
+------------------------
+-- Scr Functions
+------------------------
+
+local function GB_BOSS_REGISTER(gangType)
+    script.run_in_fiber(function()
+        local pattern = "2D 03 14 00 00 72 72"
+
+        scr_function.call_script_function("am_pi_menu", "GB_BOSS_CREATE_GANG",
+            pattern, "void", {
+                { "bool", false },    -- bDoMessage
+                { "int",  gangType }, -- gangType = GT_VIP, GT_BIKER
+                { "int",  208508824 } -- iParam2 ??
+            })
+    end)
+end
+
+local function GB_BOSS_RETIRE()
+    script.run_in_fiber(function()
+        local pattern = "2D 01 03 00 00 38 00 56 62"
+
+        scr_function.call_script_function("am_pi_menu", "GB_BOSS_RETIRE",
+            pattern, "void", {
+                { "bool", true } -- bDoMessage
+            })
+    end)
+end
+
+local function LAUNCH_MISSION(iRootContentIDHash)
+    local pattern = "2D 09 19 00 00 38 01"
+
+    local iArrayPos = MISC.GET_CONTENT_ID_INDEX(iRootContentIDHash)
+    scr_function.call_script_function("freemode", "SET_VARS_WHEN_LAUNCHING_V2_CORONA",
+        pattern, "void", {
+            { "int",  -1 },        -- iSeries
+            { "int",  iArrayPos }, -- iArrayPos
+            { "bool", false },     -- bOnCall
+            { "int",  -1 },        -- iPlaylistType
+            { "bool", true },     -- bSkipSkyCam
+            { "bool", false },     -- bSetExitVector
+            { "bool", false },     -- bFromWall
+            { "bool", true },      -- bSetSkipWarning
+            { "int",  -1 }         -- iForceJobEntryType
+        })
+end
 
 --#endregion
 
@@ -1248,54 +1320,64 @@ menu_feemode_mission:add_separator()
 menu_feemode_mission:add_text("<<  直接完成任务  >>")
 
 menu_feemode_mission:add_button("直接完成 安保合约", function()
-    local script_name = "fm_content_security_contract"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    script.run_in_fiber(function()
+        local script_name = "fm_content_security_contract"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+        INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    end)
 end)
 
 menu_feemode_mission:add_button("直接完成 电话暗杀", function()
-    local script_name = "fm_content_payphone_hit"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    script.run_in_fiber(function()
+        local script_name = "fm_content_payphone_hit"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+        INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    end)
 end)
 menu_feemode_mission:add_sameline()
 menu_feemode_mission:add_button("直接完成 电话暗杀(暗杀奖励)", function()
-    local script_name = "fm_content_payphone_hit"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-    LOCAL_SET_BIT(script_name, Locals[script_name].iMissionServerBitSet + 1, 1)
-    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    script.run_in_fiber(function()
+        local script_name = "fm_content_payphone_hit"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+        LOCAL_SET_BIT(script_name, Locals[script_name].iMissionServerBitSet + 1, 1)
+        INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    end)
 end)
 
 menu_feemode_mission:add_button("直接完成 改装铺服务", function()
-    local script_name = "fm_content_auto_shop_delivery"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-    if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
-        TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
-    end
+    script.run_in_fiber(function()
+        local script_name = "fm_content_auto_shop_delivery"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+        if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
+            TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
+        end
 
-    LOCAL_SET_BIT(script_name, Locals[script_name].iMissionEntityBitSet + 1 + 0 * 3 + 1 + 0, 4)
-    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+        LOCAL_SET_BIT(script_name, Locals[script_name].iMissionEntityBitSet + 1 + 0 * 3 + 1 + 0, 4)
+        INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    end)
 end)
 menu_feemode_mission:add_sameline()
 menu_feemode_mission:add_button("直接完成 摩托车服务", function()
-    local script_name = "fm_content_bike_shop_delivery"
-    if not IS_SCRIPT_RUNNING(script_name) then
-        return
-    end
-    if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
-        TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
-    end
+    script.run_in_fiber(function()
+        local script_name = "fm_content_bike_shop_delivery"
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+        if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
+            TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
+        end
 
-    LOCAL_SET_BIT(script_name, Locals[script_name].iMissionEntityBitSet + 1 + 0 * 3 + 1 + 0, 4)
-    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+        LOCAL_SET_BIT(script_name, Locals[script_name].iMissionEntityBitSet + 1 + 0 * 3 + 1 + 0, 4)
+        INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+    end)
 end)
 
 menu_feemode_mission:add_text("")
@@ -1439,136 +1521,12 @@ local menu_mission <const> = menu_root:add_tab("[RSM] 抢劫任务")
 
 local MenuHMission = {}
 
-menu_mission:add_text("*所有功能均在单人战局测试可用*")
-
---------------------------------
--- General
---------------------------------
-
-menu_mission:add_text("<<  通用  >>")
-
-MenuHMission["SetMinPlayers"] = menu_mission:add_checkbox("最小玩家数为 1 (强制任务单人可开)")
-menu_mission:add_sameline()
-MenuHMission["SetMaxTeams"] = menu_mission:add_checkbox("最大团队数为 1 (用于多团队任务)")
-
-menu_mission:add_button("直接完成任务 (通用)", function()
-    FM_MISSION_CONTROLLER.RUN(function(script_name)
-        FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
-    end)
-end)
-menu_mission:add_sameline()
-menu_mission:add_button("跳到下一个检查点 (解决单人任务卡关问题)", function()
-    FM_MISSION_CONTROLLER.RUN(function(mission_script)
-        LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
-    end)
-end)
-
-MenuHMission["DisableMissionAggroFail"] = menu_mission:add_checkbox("禁止因触发惊动而任务失败")
-menu_mission:add_sameline()
-MenuHMission["DisableMissionFail"] = menu_mission:add_checkbox("禁止任务失败 (仅单人可用)")
-menu_mission:add_sameline()
-menu_mission:add_button("允许任务失败", function()
-    MenuHMission["DisableMissionFail"]:set_enabled(false)
-
-    FM_MISSION_CONTROLLER.RUN(function(mission_script)
-        LOCAL_CLEAR_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
-    end)
-end)
-
-MenuHMission["ObjectiveTimeLimit"] = menu_mission:add_input_int("任务剩余时间")
-menu_mission:add_button("设置任务剩余时间", function()
-    local value = MenuHMission["ObjectiveTimeLimit"]:get_value()
-    if value < 0 then
-        value = 0
-    elseif value > 9999 then
-        value = 9999
-    end
-    MenuHMission["ObjectiveTimeLimit"]:set_value(value)
-
-    FM_MISSION_CONTROLLER.RUN(function(mission_script)
-        local team = PLAYER.GET_PLAYER_TEAM(PLAYER.PLAYER_ID())
-
-        LOCAL_SET_INT(mission_script, Locals[mission_script].iMultiObjectiveTimeLimit + team, value * 60 * 1000)
-    end)
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("(单位: 分钟, 右下角的剩余时间倒计时)")
-menu_mission:add_sameline()
-MenuHMission["LockObjectiveLimitTimer"] = menu_mission:add_checkbox("锁定任务剩余时间")
-
-
-
---------------------------------
--- Launch Mission
---------------------------------
-
-menu_mission:add_separator()
-menu_mission:add_text("<<  启动差事  >>")
-menu_mission:add_text("未对室内类型进行检查, 启动差事前确保在正确的室内")
-menu_mission:add_text("点击启动差事后, 耐心等待差事加载")
-
-
-menu_mission:add_button("启动差事: 别惹德瑞", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
-    end
-
-    if stats.get_int("MPX_FIXER_HQ_OWNED") <= 0 then
-        notify("启动差事", "你需要拥有事务所")
-        return
-    end
-    if not IS_PLAYER_BOSS_OF_A_GANG() then
-        notify("启动差事", "你需要注册为老大")
-        return
-    end
-
-    local Data = {
-        iRootContentID = 1645353926, -- Tunable: FIXER_INSTANCED_STORY_MISSION_ROOT_CONTENT_ID5
-        iMissionType = 0,            -- FMMC_TYPE_MISSION
-        iMissionEnteryType = 81,     -- ciMISSION_ENTERY_TYPE_FIXER_WORLD_TRIGGER
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有事务所")
-
-
-menu_mission:add_button("启动差事: 犯罪现场 (潜行)", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
-    end
-
-    local Data = {
-        iRootContentID = 13546844, -- Tunable: SALV23_CHICKEN_FACTORY_RAID_ROOT_CONTENT_ID_6
-        iMissionType = 0,          -- FMMC_TYPE_MISSION
-        iMissionEnteryType = 32,   -- ciMISSION_ENTERY_TYPE_V2_CORONA
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_button("启动差事: 犯罪现场 (强攻)", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
-    end
-
-    local Data = {
-        iRootContentID = 2107866924, -- Tunable: SALV23_CHICKEN_FACTORY_RAID_ROOT_CONTENT_ID_5
-        iMissionType = 0,            -- FMMC_TYPE_MISSION
-        iMissionEnteryType = 32,     -- ciMISSION_ENTERY_TYPE_V2_CORONA
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-
-menu_mission:add_text("")
-
-
 local IslandHeistConfig = {
+    menu = {
+        initialized = false,
+        showUI = false
+    },
+
     bHardModeEnabled = false,
 
     eApproachVehicle = 6 - 1,
@@ -1580,52 +1538,12 @@ local IslandHeistConfig = {
     eWeaponLoadout = 1 - 1,
     bUseSuppressors = true
 }
-menu_mission:add_button("启动差事: 佩里科岛抢劫", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
-    end
 
-    if stats.get_int("MPX_IH_SUB_OWNED") <= 0 then
-        notify("启动差事", "你需要拥有虎鲸")
-        return
-    end
-    if not IS_PLAYER_BOSS_OF_A_GANG() then
-        notify("启动差事", "你需要注册为老大")
-        return
-    end
-    if not IS_PLAYER_IN_KOSATKA() then
-        notify("启动差事", "你需要在虎鲸内部")
-        return
-    end
-
-
-    local Data = {
-        iRootContentID = -1172878953, -- Tunable: H4_ROOT_CONTENT_ID_0
-        iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
-        iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有虎鲸; 3. 在虎鲸内部;")
-
-local menu_island_heist_config = {
-    initialized = false,
-    can_show = false
-}
-menu_mission:add_button("设置终章面板", function()
-    menu_island_heist_config.can_show = not menu_island_heist_config.can_show
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("如果没有完成必须前置，需要设置终章面板后才可点击继续按钮")
-
-menu_mission:add_imgui(function()
-    if menu_island_heist_config.can_show and ImGui.Begin("佩里科岛抢劫 终章面板设置") then
-        if not menu_island_heist_config.initialized then
+IslandHeistConfig.menu.drawUI = function()
+    if ImGui.Begin("佩里科岛抢劫 终章面板设置") then
+        if not IslandHeistConfig.menu.initialized then
             ImGui.SetWindowSize(400, 500)
-            menu_island_heist_config.initialized = true
+            IslandHeistConfig.menu.initialized = true
         end
 
         IslandHeistConfig.bHardModeEnabled = ImGui.Checkbox(
@@ -1690,226 +1608,350 @@ menu_mission:add_imgui(function()
             GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer() + 1, 1)
             GLOBAL_SET_INT(GlobalPlayerBD_NetHeistPlanningGeneric.stFinaleLaunchTimer(), 0)
         end
-
-        ImGui.End()
     end
-end)
+    ImGui.End()
+end
 
-menu_mission:add_text("")
+local HeistMissionSelect = {
+    apartmentFinal = 0,
+    autoShop = 0,
+    doomsdayFinal = 0,
+    doomsdaySetup = 0,
 
+    mission = 0,
+}
 
-local apartment_heist_final_select = 0
 menu_mission:add_imgui(function()
-    apartment_heist_final_select, clicked = ImGui.Combo("选择公寓抢劫任务", apartment_heist_final_select, {
+    ImGui.Text("*所有功能均在单人战局测试可用*")
+
+    --------------------------------
+    -- General
+    --------------------------------
+
+    ImGui.SeparatorText("通用")
+
+    MenuHMission.SetMinPlayers = ImGui.Checkbox("最小玩家数为 1 (强制任务单人可开)", MenuHMission.SetMinPlayers)
+    ImGui.SameLine()
+    MenuHMission.SetMaxTeams = ImGui.Checkbox("最大团队数为 1 (用于多团队任务)", MenuHMission.SetMaxTeams)
+
+    if ImGui.Button("直接完成任务 (通用)") then
+        FM_MISSION_CONTROLLER.RUN(function(script_name)
+            FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
+        end)
+    end
+    ImGui.SameLine()
+    if ImGui.Button("跳到下一个检查点 (解决单人任务卡关问题)") then
+        FM_MISSION_CONTROLLER.RUN(function(mission_script)
+            LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
+        end)
+    end
+
+    MenuHMission.DisableMissionAggroFail = ImGui.Checkbox("禁止因触发惊动而任务失败", MenuHMission.DisableMissionAggroFail)
+    ImGui.SameLine()
+    MenuHMission.DisableMissionFail = ImGui.Checkbox("禁止任务失败 (仅单人可用)", MenuHMission.DisableMissionFail)
+    ImGui.SameLine()
+    if ImGui.Button("允许任务失败") then
+        MenuHMission.DisableMissionFail = false
+
+        FM_MISSION_CONTROLLER.RUN(function(mission_script)
+            LOCAL_CLEAR_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
+        end)
+    end
+
+    MenuHMission.ObjectiveTimeLimit = check_input_value(MenuHMission.ObjectiveTimeLimit, 0, 10000, 0)
+    MenuHMission.ObjectiveTimeLimit = ImGui.InputInt("任务剩余时间 [0~10000]", MenuHMission.ObjectiveTimeLimit)
+    if ImGui.Button("设置任务剩余时间") then
+        local value = MenuHMission.ObjectiveTimeLimit
+        FM_MISSION_CONTROLLER.RUN(function(mission_script)
+            local team = PLAYER.GET_PLAYER_TEAM(PLAYER.PLAYER_ID())
+
+            LOCAL_SET_INT(mission_script, Locals[mission_script].iMultiObjectiveTimeLimit + team, value * 60 * 1000)
+        end)
+    end
+    ImGui.SameLine()
+    ImGui.Text("(单位: 分钟, 右下角的剩余时间倒计时)")
+    ImGui.SameLine()
+    MenuHMission.LockObjectiveLimitTimer = ImGui.Checkbox("锁定任务剩余时间", MenuHMission.LockObjectiveLimitTimer)
+
+
+    --------------------------------
+    -- Launch Mission
+    --------------------------------
+
+    ImGui.SeparatorText("启动差事")
+    ImGui.BulletText("未对室内类型进行检查，启动差事前确保在正确的室内")
+    ImGui.BulletText("点击启动差事后，耐心等待差事加载")
+    ImGui.Dummy(1, 5)
+
+
+    if ImGui.Button("启动差事: 别惹德瑞") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            if stats.get_int("MPX_FIXER_HQ_OWNED") <= 0 then
+                notify("启动差事", "你需要拥有事务所")
+                return
+            end
+            if not IS_PLAYER_BOSS_OF_A_GANG() then
+                notify("启动差事", "你需要注册为老大")
+                return
+            end
+
+            -- local Data = {
+            --     iRootContentID = 1645353926, -- Tunable: FIXER_INSTANCED_STORY_MISSION_ROOT_CONTENT_ID5
+            --     iMissionType = 0,            -- FMMC_TYPE_MISSION
+            --     iMissionEnteryType = 81,     -- ciMISSION_ENTERY_TYPE_FIXER_WORLD_TRIGGER
+            -- }
+
+            LAUNCH_MISSION(1645353926) -- Tunable: FIXER_INSTANCED_STORY_MISSION_ROOT_CONTENT_ID5
+            notify("启动差事", "请稍等...")
+        end)
+    end
+    ImGui.SameLine()
+    ImGui.Text("要求: 1. 注册为老大; 2. 拥有事务所")
+    ImGui.Dummy(1, 5)
+
+
+    if ImGui.Button("启动差事: 佩里科岛抢劫") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            if stats.get_int("MPX_IH_SUB_OWNED") <= 0 then
+                notify("启动差事", "你需要拥有虎鲸")
+                return
+            end
+            if not IS_PLAYER_BOSS_OF_A_GANG() then
+                notify("启动差事", "你需要注册为老大")
+                return
+            end
+            if not IS_PLAYER_IN_KOSATKA() then
+                notify("启动差事", "你需要在虎鲸内部")
+                return
+            end
+
+            -- local Data = {
+            --     iRootContentID = -1172878953, -- Tunable: H4_ROOT_CONTENT_ID_0
+            --     iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
+            --     iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
+            -- }
+
+            LAUNCH_MISSION(-1172878953) -- Tunable: H4_ROOT_CONTENT_ID_0
+            notify("启动差事", "请稍等...")
+        end)
+    end
+    ImGui.SameLine()
+    ImGui.Text("要求: 1. 注册为老大; 2. 拥有虎鲸; 3. 在虎鲸内部;")
+
+    if ImGui.Button("佩里科岛抢劫 设置终章面板") then
+        IslandHeistConfig.menu.showUI = not IslandHeistConfig.menu.showUI
+    end
+    ImGui.SameLine()
+    ImGui.Text("如果没有完成必须前置，需要设置终章面板后才可点击继续按钮")
+
+    if IslandHeistConfig.menu.showUI then
+        IslandHeistConfig.menu.drawUI()
+    end
+    ImGui.Dummy(1, 5)
+
+
+    HeistMissionSelect.apartmentFinal = ImGui.Combo("选择公寓抢劫任务", HeistMissionSelect.apartmentFinal, {
         "全福银行差事", "越狱", "突袭人道研究实验室", "首轮募资", "太平洋标准银行差事"
     }, 5)
-end)
-menu_mission:add_button("启动差事: 公寓抢劫任务 终章", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
+
+    if ImGui.Button("启动差事: 公寓抢劫任务 终章") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            local ApartmentHeistFinal = {
+                [0] = "_T5Vz_ZV2kiIdfzRP3fJYQ",
+                [1] = "ISSREsbrtUGrxSiLmlUCRA",
+                [2] = "82ihljX03UO9tTUoLbukSQ",
+                [3] = "qr5DtZrmrkGad_9pemY39g",
+                [4] = "tYc3SkqXTk6ia7j0lezrbQ"
+            }
+
+            if not INTERIOR.IS_INTERIOR_SCENE() then
+                notify("启动差事", "你需要在公寓内部")
+                return
+            end
+            if not IS_PLAYER_NEAR_HEIST_PLANNING_BOARD() then
+                notify("启动差事", "你需要在抢劫计划面板附近")
+                return
+            end
+
+            local ContentID = ApartmentHeistFinal[HeistMissionSelect.apartmentFinal]
+            LAUNCH_APARTMENT_HEIST(ContentID)
+            notify("启动差事", "请稍等...")
+        end)
     end
-
-    local apartment_heist_final_content = {
-        [0] = "_T5Vz_ZV2kiIdfzRP3fJYQ",
-        [1] = "ISSREsbrtUGrxSiLmlUCRA",
-        [2] = "82ihljX03UO9tTUoLbukSQ",
-        [3] = "qr5DtZrmrkGad_9pemY39g",
-        [4] = "tYc3SkqXTk6ia7j0lezrbQ"
-    }
-
-    if not INTERIOR.IS_INTERIOR_SCENE() then
-        notify("启动差事", "你需要在公寓内部")
-        return
+    ImGui.SameLine()
+    if ImGui.Button("跳过动画 (点击 开始游戏 之前使用)") then
+        GLOBAL_SET_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 0)   -- CORONA_HEIST_CUTSCENE_HAS_BEEN_VALIDATED
+        GLOBAL_CLEAR_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 1) -- CORONA_HEIST_FINALE_CUTSCENE_CAN_PLAY
     end
-    if not IS_PLAYER_NEAR_HEIST_PLANNING_BOARD() then
-        notify("启动差事", "你需要在抢劫计划面板附近")
-        return
-    end
-
-    local ContentID = apartment_heist_final_content[apartment_heist_final_select]
-    LAUNCH_APARTMENT_HEIST(ContentID)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_button("跳过动画 (点击 开始游戏 之前使用)", function()
-    GLOBAL_SET_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 0)   -- CORONA_HEIST_CUTSCENE_HAS_BEEN_VALIDATED
-    GLOBAL_CLEAR_BIT(g_TransitionSessionNonResetVars.sTransVars.iCoronaBitSet + 1 + 4, 1) -- CORONA_HEIST_FINALE_CUTSCENE_CAN_PLAY
-end)
-menu_mission:add_text("要求: 1. 需要在公寓内部 抢劫计划面板附近; 2. 启动差事后右下角没有提示下载，就动两下")
-
-menu_mission:add_text("")
+    ImGui.Text("要求: 1. 需要在公寓内部 抢劫计划面板附近; 2. 启动差事后右下角没有提示下载，就动两下")
+    ImGui.Dummy(1, 5)
 
 
-local auto_shop_final_select = 0
-menu_mission:add_imgui(function()
-    auto_shop_final_select, clicked = ImGui.Combo("选择改装铺合约", auto_shop_final_select, {
+    HeistMissionSelect.autoShop = ImGui.Combo("选择改装铺合约", HeistMissionSelect.autoShop, {
         "联合储蓄合约", "大钞交易", "银行合约", "电控单元差事", "监狱合约", "IAA 交易", "失落摩托帮合约", "数据合约"
     }, 8, 5)
-end)
-menu_mission:add_button("启动差事: 改装铺抢劫", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
+
+    if ImGui.Button("启动差事: 改装铺抢劫") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            local AutoShopFinal = {
+                [0] = 2064133602, -- Tunable: TUNER_ROBBERY_FINALE_ROOT_CONTENT_ID0
+                [1] = 1364299584,
+                [2] = 14434931,
+                [3] = 808119513,
+                [4] = -554734818,
+                [5] = -1750247281,
+                [6] = 1767266297,
+                [7] = -1931849607
+            }
+
+            if stats.get_int("MPX_AUTO_SHOP_OWNED") <= 0 then
+                notify("启动差事", "你需要拥有改装铺")
+                return
+            end
+            if not IS_PLAYER_BOSS_OF_A_GANG() then
+                notify("启动差事", "你需要注册为老大")
+                return
+            end
+            if not INTERIOR.IS_INTERIOR_SCENE() then
+                notify("启动差事", "你需要在改装铺内部")
+                return
+            end
+
+            LAUNCH_MISSION(AutoShopFinal[HeistMissionSelect.autoShop])
+            notify("启动差事", "请稍等...")
+        end)
     end
-
-    local auto_shop_final_root_content = {
-        [0] = 2064133602, -- Tunable: TUNER_ROBBERY_FINALE_ROOT_CONTENT_ID0
-        [1] = 1364299584,
-        [2] = 14434931,
-        [3] = 808119513,
-        [4] = -554734818,
-        [5] = -1750247281,
-        [6] = 1767266297,
-        [7] = -1931849607
-    }
-
-    if stats.get_int("MPX_AUTO_SHOP_OWNED") <= 0 then
-        notify("启动差事", "你需要拥有改装铺")
-        return
-    end
-    if not IS_PLAYER_BOSS_OF_A_GANG() then
-        notify("启动差事", "你需要注册为老大")
-        return
-    end
-    if not INTERIOR.IS_INTERIOR_SCENE() then
-        notify("启动差事", "你需要在改装铺内部")
-        return
-    end
+    ImGui.SameLine()
+    ImGui.Text("要求: 1. 注册为老大; 2. 拥有改装铺; 3. 在改装铺内部")
+    ImGui.Dummy(1, 5)
 
 
-    local Data = {
-        iRootContentID = auto_shop_final_root_content[auto_shop_final_select],
-        iMissionType = 274,      -- FMMC_TYPE_TUNER_ROBBERY_FINALE
-        iMissionEnteryType = 69, -- ciMISSION_ENTERY_TYPE_TUNER_JOB_BOARD
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有改装铺; 3. 在改装铺内部")
-
-menu_mission:add_text("")
-
-
-local doomsday_heist_final_select = 0
-menu_mission:add_imgui(function()
-    doomsday_heist_final_select, clicked = ImGui.Combo("选择末日豪劫终章", doomsday_heist_final_select, {
+    HeistMissionSelect.doomsdayFinal = ImGui.Combo("选择末日豪劫终章", HeistMissionSelect.doomsdayFinal, {
         "数据泄露", "波格丹危机", "末日将至"
     }, 3)
-end)
-menu_mission:add_button("启动差事: 末日豪劫 终章", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
+    if ImGui.Button("启动差事: 末日豪劫 终章") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            local DoomsdayHeistFinal = {
+                [0] = 1175383697, -- Tunable: FHM_FLOW_ROOTCONTENT_ID_3
+                [1] = -411752237,
+                [2] = -1176220645
+            }
+
+            if stats.get_int("MPX_DBASE_OWNED") <= 0 then
+                notify("启动差事", "你需要拥有设施")
+                return
+            end
+            if not IS_PLAYER_BOSS_OF_A_GANG() then
+                notify("启动差事", "你需要注册为老大")
+                return
+            end
+            if not INTERIOR.IS_INTERIOR_SCENE() then
+                notify("启动差事", "你需要在设施内部")
+                return
+            end
+
+            LAUNCH_MISSION(DoomsdayHeistFinal[HeistMissionSelect.doomsdayFinal])
+            notify("启动差事", "请稍等...")
+        end)
     end
+    ImGui.SameLine()
+    ImGui.Text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
 
-    local doomsday_heist_final_root_content = {
-        [0] = 1175383697, -- Tunable: FHM_FLOW_ROOTCONTENT_ID_3
-        [1] = -411752237,
-        [2] = -1176220645
-    }
-
-    if stats.get_int("MPX_DBASE_OWNED") <= 0 then
-        notify("启动差事", "你需要拥有设施")
-        return
-    end
-    if not IS_PLAYER_BOSS_OF_A_GANG() then
-        notify("启动差事", "你需要注册为老大")
-        return
-    end
-    if not INTERIOR.IS_INTERIOR_SCENE() then
-        notify("启动差事", "你需要在设施内部")
-        return
-    end
-
-
-    local Data = {
-        iRootContentID = doomsday_heist_final_root_content[doomsday_heist_final_select],
-        iMissionType = 235, -- FMMC_TYPE_FM_GANGOPS_FIN
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
-
-menu_mission:add_text("")
-
-
-local doomsday_heist_setup_select = 0
-menu_mission:add_imgui(function()
-    doomsday_heist_setup_select, clicked = ImGui.Combo("选择末日豪劫准备任务", doomsday_heist_setup_select, {
+    HeistMissionSelect.doomsdaySetup = ImGui.Combo("选择末日豪劫准备任务", HeistMissionSelect.doomsdaySetup, {
         "亡命速递", "拦截信号", "服务器群组",
         "复仇者", "营救 ULP", "抢救硬盘", "潜水艇侦察",
         "营救 14 号探员", "护送 ULP", "巴拉杰", "可汗贾利", "空中防御"
     }, 12, 5)
+    if ImGui.Button("启动差事: 末日豪劫 准备任务") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            local DoomsdayHeistSetup = {
+                [0] = -1984590517, -- Tunable: FHM_FLOW_ROOTCONTENT_ID_0
+                [1] = -1306877878,
+                [2] = 83978007,
+
+                [3] = 1673641696,
+                [4] = 1549726198,
+                [5] = 1146411126,
+                [6] = 1981951486,
+
+                [7] = 1865386823,
+                [8] = 1374735669,
+                [9] = -1651202044,
+                [10] = 1579954143,
+                [11] = -110733685
+            }
+
+            if stats.get_int("MPX_DBASE_OWNED") <= 0 then
+                notify("启动差事", "你需要拥有设施")
+                return
+            end
+            if not IS_PLAYER_BOSS_OF_A_GANG() then
+                notify("启动差事", "你需要注册为老大")
+                return
+            end
+            if not INTERIOR.IS_INTERIOR_SCENE() then
+                notify("启动差事", "你需要在设施内部")
+                return
+            end
+
+            LAUNCH_MISSION(DoomsdayHeistSetup[HeistMissionSelect.doomsdaySetup])
+            notify("启动差事", "请稍等...")
+        end)
+    end
+    ImGui.SameLine()
+    ImGui.Text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
+    ImGui.Dummy(1, 5)
+
+    HeistMissionSelect.mission = ImGui.Combo("选择差事任务", HeistMissionSelect.mission, {
+        "犯罪现场 (潜行)", "犯罪现场 (强攻)",
+        "头号通缉犯：惠特尼", "头号通缉犯：里伯曼", "头号通缉犯：奥尼尔", "头号通缉犯：汤普森", "头号通缉犯：宋", "头号通缉犯：加西亚"
+    }, 8, 5)
+    if ImGui.Button("启动差事任务") then
+        script.run_in_fiber(function()
+            if not CAN_LAUNCH_MISSION() then
+                return
+            end
+
+            local MissionRootContentIDHash = {
+                [0] = 13546844,    -- Tunable: SALV23_CHICKEN_FACTORY_RAID_ROOT_CONTENT_ID_6
+                [1] = 2107866924,  -- Tunable: SALV23_CHICKEN_FACTORY_RAID_ROOT_CONTENT_ID_5
+                [2] = -1814367299, -- Tunable: 1246442820
+                [3] = -1443228923, -- Tunable: 950440443
+                [4] = -625494467,  -- Tunable: 1992953409
+                [5] = -1381858108, -- Tunable: 1693084290
+                [6] = 1585225527,  -- Tunable: 59877330
+                [7] = -62594295,   -- Tunable: -243334227
+            }
+
+            LAUNCH_MISSION(MissionRootContentIDHash[HeistMissionSelect.mission])
+            notify("启动差事", "请稍等...")
+        end)
+    end
 end)
-menu_mission:add_button("启动差事: 末日豪劫 准备任务", function()
-    if IS_MISSION_CONTROLLER_SCRIPT_RUNNING() then
-        return
-    end
-
-    local doomsday_heist_setup_root_content = {
-        [0] = -1984590517, -- Tunable: FHM_FLOW_ROOTCONTENT_ID_0
-        [1] = -1306877878,
-        [2] = 83978007,
-
-        [3] = 1673641696,
-        [4] = 1549726198,
-        [5] = 1146411126,
-        [6] = 1981951486,
-
-        [7] = 1865386823,
-        [8] = 1374735669,
-        [9] = -1651202044,
-        [10] = 1579954143,
-        [11] = -110733685
-    }
-
-    if stats.get_int("MPX_DBASE_OWNED") <= 0 then
-        notify("启动差事", "你需要拥有设施")
-        return
-    end
-    if not IS_PLAYER_BOSS_OF_A_GANG() then
-        notify("启动差事", "你需要注册为老大")
-        return
-    end
-    if not INTERIOR.IS_INTERIOR_SCENE() then
-        notify("启动差事", "你需要在设施内部")
-        return
-    end
-
-
-    local Data = {
-        iRootContentID = doomsday_heist_setup_root_content[doomsday_heist_setup_select],
-        iMissionType = 233, -- FMMC_TYPE_FM_GANGOPS
-    }
-
-    LAUNCH_MISSION(Data)
-    notify("启动差事", "请稍等...")
-end)
-menu_mission:add_sameline()
-menu_mission:add_text("要求: 1. 注册为老大; 2. 拥有设施; 3. 在设施内部")
-
-
-
-menu_mission:add_separator()
-menu_mission:add_text("<<  限制差事收入  >>")
-MenuHMission["MissionEarningHigh"] = menu_mission:add_input_int("最高收入")
-MenuHMission["MissionEarningLow"] = menu_mission:add_input_int("最低收入")
-MenuHMission["MissionEarningModifier"] = menu_mission:add_checkbox("开启限制差事收入 [0 ~ 15000000]")
-menu_mission:add_sameline()
-menu_mission:add_button("取消差事收入限制", function()
-    MenuHMission["MissionEarningModifier"]:set_enabled(false)
-
-    GLOBAL_SET_FLOAT(Tunables["HIGH_ROCKSTAR_MISSIONS_MODIFIER"], 0)
-    GLOBAL_SET_FLOAT(Tunables["LOW_ROCKSTAR_MISSIONS_MODIFIER"], 0)
-end)
-
-menu_mission:add_text("数值为0, 则不进行限制; 限制最低收入后, 差事最终结算时最低收入就为设置的值;")
-
-
-
 
 
 
@@ -1930,7 +1972,7 @@ local coronaMenuData = {
 }
 
 
-local function REGISTER_AS_A_CEO()
+local function _REGISTER_AS_A_CEO()
     script.run_in_fiber(function(script_util)
         local ePiStage = 1526
 
@@ -2025,11 +2067,6 @@ local function GET_CORONA_STATUS()
     return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193)
 end
 
-local function IS_PLAYER_IN_CORONA()
-    return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193) ~= CORONA_STATUS_ENUM.CORONA_STATUS_IDLE
-end
-
-
 
 --------------------------------
 -- Auto Island Heist
@@ -2038,7 +2075,7 @@ end
 menu_automation:add_text("<<  全自动佩里科岛抢劫  >>")
 
 menu_automation:add_text("*仅适用于单人*")
-menu_automation:add_text("要求: 1. 开启后无需任何操作，只需等待任务结束; 2. 自动注册CEO可能会有问题，可以提前注册")
+menu_automation:add_text("要求: 1. 开启后无需任何操作，只需等待任务结束")
 
 -- menu_automation:add_button("设置偏好出生地点为 虎鲸", function()
 --     stats.set_int("MPX_SPAWN_LOCATION_SETTING", 16)
@@ -2197,17 +2234,17 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
                 script_util:sleep(setting.delay)
 
                 if not IS_PLAYER_BOSS_OF_A_GANG() then
-                    REGISTER_AS_A_CEO()
+                    GB_BOSS_REGISTER()
 
                     AutoIslandHeist.notify("注册为CEO...")
                     AutoIslandHeist.setStatus(AutoIslandHeistStatus.RegisterAsCEO)
                 else
-                    local Data = {
-                        iRootContentID = -1172878953, -- HIM_STUB
-                        iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
-                        iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
-                    }
-                    LAUNCH_MISSION(Data)
+                    -- local Data = {
+                    --     iRootContentID = -1172878953, -- HIM_STUB
+                    --     iMissionType = 260,           -- FMMC_TYPE_HEIST_ISLAND_FINALE
+                    --     iMissionEnteryType = 67,      -- ciMISSION_ENTERY_TYPE_HEIST_ISLAND_TABLE
+                    -- }
+                    LAUNCH_MISSION(-1172878953)
 
                     AutoIslandHeist.notify("启动差事...")
                     AutoIslandHeist.setStatus(AutoIslandHeistStatus.CoronaIntro)
@@ -2405,8 +2442,8 @@ function AutoApartmentHeist.toggleButtonName(toggle)
 end
 
 function AutoApartmentHeist.cleanup()
-    MenuHMission["SetMinPlayers"]:set_enabled(AutoApartmentHeist.minPlayers)
-    MenuHMission["SetMaxTeams"]:set_enabled(AutoApartmentHeist.maxTeams)
+    MenuHMission.SetMinPlayers = AutoApartmentHeist.minPlayers
+    MenuHMission.SetMaxTeams = AutoApartmentHeist.maxTeams
 
     AutoApartmentHeist.enable = false
     AutoApartmentHeist.status = AutoApartmentHeistStatus.Disable
@@ -2439,11 +2476,11 @@ AutoApartmentHeist.button = menu_automation:add_button("开启 全自动公寓�
         return
     end
 
-    AutoApartmentHeist.minPlayers = MenuHMission["SetMinPlayers"]:is_enabled()
-    AutoApartmentHeist.maxTeams = MenuHMission["SetMaxTeams"]:is_enabled()
+    AutoApartmentHeist.minPlayers = MenuHMission.SetMinPlayers
+    AutoApartmentHeist.maxTeams = MenuHMission.SetMaxTeams
 
-    MenuHMission["SetMinPlayers"]:set_enabled(true)
-    MenuHMission["SetMaxTeams"]:set_enabled(true)
+    MenuHMission.SetMinPlayers = true
+    MenuHMission.SetMaxTeams = true
 
     AutoApartmentHeist.setting.delay = get_input_value(AutoApartmentHeist.menu.delay, 0, 5000)
 
@@ -2562,7 +2599,56 @@ local menu_misc <const> = menu_root:add_tab("[RSM] 其它")
 
 local MenuMisc = {}
 
-menu_misc:add_text("零食和护甲")
+menu_misc:add_text("<<  CEO 工具  >>")
+menu_misc:add_button("注册为 CEO/VIP", function()
+    if not IS_PLAYER_BOSS_OF_A_GANG() then
+        GB_BOSS_REGISTER(0)
+    end
+end)
+menu_misc:add_sameline()
+menu_misc:add_button("注册为 摩托帮首领", function()
+    if not IS_PLAYER_BOSS_OF_A_GANG() then
+        GB_BOSS_REGISTER(1)
+    end
+end)
+menu_misc:add_sameline()
+menu_misc:add_button("退出注册", function()
+    if IS_PLAYER_BOSS_OF_A_GANG() then
+        GB_BOSS_RETIRE()
+    end
+end)
+
+MenuMisc["CeoVehicleModel"] = menu_misc:add_input_string("CEO 载具模型名称/Hash")
+MenuMisc["CeoVehicleModel"]:set_value("oppressor2")
+menu_misc:add_button("请求 CEO 载具", function()
+    script.run_in_fiber(function()
+        local model = MenuMisc["CeoVehicleModel"]:get_value()
+        if model ~= tonumber(model) then
+            model = joaat(model)
+        end
+        if not STREAMING.IS_MODEL_A_VEHICLE(model) then
+            notify("请求 CEO 载具", "载具模型 Hash 错误")
+            return
+        end
+        if not IS_PLAYER_BOSS_OF_A_GANG() then
+            notify("请求 CEO 载具", "你还未注册为 CEO")
+            return
+        end
+
+        network.trigger_script_event(1 << PLAYER.PLAYER_ID(), {
+            -1140090124, -- SCRIPT_EVENT_REQUEST_BOSS_LIMO
+            PLAYER.PLAYER_ID(),
+            -1,
+            model, -- vehicleModel
+            true   -- bIgnoreDistanceChecks
+        })
+        notify("请求 CEO 载具", "已请求")
+    end)
+end)
+
+
+menu_misc:add_separator()
+menu_misc:add_text("<<  零食和护甲  >>")
 MenuMisc["DisableStatCapCheck"] = menu_misc:add_checkbox("禁用最大携带量限制")
 menu_misc:add_sameline()
 menu_misc:add_button("零食数量 9999", function()
@@ -2589,6 +2675,20 @@ menu_misc:add_button("护甲数量 9999", function()
 end)
 
 
+menu_misc:add_separator()
+menu_misc:add_text("<<  限制任务差事收入  >>")
+MenuMisc["MissionEarningHigh"] = menu_misc:add_input_int("最高收入")
+MenuMisc["MissionEarningLow"] = menu_misc:add_input_int("最低收入")
+MenuMisc["MissionEarningModifier"] = menu_misc:add_checkbox("开启限制差事收入 [0 ~ 15000000]")
+menu_misc:add_sameline()
+menu_misc:add_button("取消差事收入限制", function()
+    MenuMisc["MissionEarningModifier"]:set_enabled(false)
+
+    GLOBAL_SET_FLOAT(Tunables["HIGH_ROCKSTAR_MISSIONS_MODIFIER"], 0)
+    GLOBAL_SET_FLOAT(Tunables["LOW_ROCKSTAR_MISSIONS_MODIFIER"], 0)
+end)
+menu_misc:add_text("数值为0, 则不进行限制; 限制最低收入后, 差事最终结算时最低收入就为设置的值;")
+
 
 
 
@@ -2600,13 +2700,13 @@ end)
 --------------------------------
 
 script.register_looped("RS_Missions.Main", function()
-    if MenuHMission["SetMinPlayers"]:is_enabled() then
+    if MenuHMission.SetMinPlayers then
         local script_name = "fmmc_launcher"
         if IS_SCRIPT_RUNNING(script_name) then
             local iArrayPos = LOCAL_GET_INT(script_name, sLaunchMissionDetails.iMissionVariation)
             if iArrayPos > 0 then
-                if GLOBAL_GET_INT(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 69) > 1 then
-                    GLOBAL_SET_INT(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 69, 1)
+                if GLOBAL_GET_INT(g_FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 69) > 1 then
+                    GLOBAL_SET_INT(g_FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 69, 1)
                     LOCAL_SET_INT(script_name, sLaunchMissionDetails.iMinPlayers, 1)
                 end
 
@@ -2617,24 +2717,24 @@ script.register_looped("RS_Missions.Main", function()
         end
     end
 
-    if MenuHMission["SetMaxTeams"]:is_enabled() then
+    if MenuHMission.SetMaxTeams then
         GLOBAL_SET_INT(FMMC_STRUCT.iNumberOfTeams, 1)
         GLOBAL_SET_INT(FMMC_STRUCT.iMaxNumberOfTeams, 1)
     end
 
-    if MenuHMission["DisableMissionAggroFail"]:is_enabled() then
+    if MenuHMission.DisableMissionAggroFail then
         FM_MISSION_CONTROLLER.RUN(function(mission_script)
             LOCAL_CLEAR_BITS(mission_script, Locals[mission_script].iServerBitSet1, 24, 28)
         end)
     end
 
-    if MenuHMission["DisableMissionFail"]:is_enabled() then
+    if MenuHMission.DisableMissionFail then
         FM_MISSION_CONTROLLER.RUN(function(mission_script)
             LOCAL_SET_BIT(mission_script, Locals[mission_script].iLocalBoolCheck11, 7)
         end)
     end
 
-    if MenuHMission["LockObjectiveLimitTimer"]:is_enabled() then
+    if MenuHMission.LockObjectiveLimitTimer then
         FM_MISSION_CONTROLLER.RUN(function(mission_script)
             local team = PLAYER.GET_PLAYER_TEAM(PLAYER.PLAYER_ID())
 
@@ -2649,28 +2749,16 @@ script.register_looped("RS_Missions.Main", function()
         end)
     end
 
-    if MenuMisc["DisableStatCapCheck"]:is_enabled() then
+    if MenuHMission.DisableStatCapCheck then
         GLOBAL_SET_INT(Tunables["DISABLE_STAT_CAP_CHECK"], 1)
     end
 end)
 
 script.register_looped("RS_Missions.MissionEarning", function()
-    local earning_max = MenuHMission["MissionEarningHigh"]:get_value()
-    local earning_min = MenuHMission["MissionEarningLow"]:get_value()
+    local earning_max = get_input_value(MenuMisc["MissionEarningHigh"], 0, 15000000)
+    local earning_min = get_input_value(MenuMisc["MissionEarningLow"], 0, 15000000)
 
-    if earning_max < 0 then
-        MenuHMission["MissionEarningHigh"]:set_value(0)
-    elseif earning_max > 15000000 then
-        MenuHMission["MissionEarningHigh"]:set_value(15000000)
-    end
-
-    if earning_min < 0 then
-        MenuHMission["MissionEarningLow"]:set_value(0)
-    elseif earning_min > 15000000 then
-        MenuHMission["MissionEarningLow"]:set_value(15000000)
-    end
-
-    if MenuHMission["MissionEarningModifier"]:is_enabled() then
+    if MenuMisc["MissionEarningModifier"]:is_enabled() then
         if earning_max ~= 0 then
             GLOBAL_SET_FLOAT(Tunables["HIGH_ROCKSTAR_MISSIONS_MODIFIER"], earning_max)
         end
