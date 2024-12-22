@@ -3,8 +3,7 @@
 -- Github: https://github.com/TCRoid/YimMenu-Lua-RS-Missions
 ----------------------------------------------------------------
 
-local SUPPORT_GAME_VERSION <const> = "1.69-3323"
-
+local SUPPORT_GAME_VERSION <const> = "1.70-3411"
 
 
 --#region functions
@@ -62,6 +61,22 @@ local function check_input_value(input_value, min_value, max_value, default_valu
     end
 
     return input_value
+end
+
+local function add_toggle_button(menu_parent, menu_name, on_change, default_on)
+    local toggle = default_on
+    local button
+
+    button = menu_parent:add_button(string.format("%s: < %s >", menu_name, toggle and "开" or "关"), function()
+        toggle = not toggle
+        button:set_text(string.format("%s: < %s >", menu_name, toggle and "开" or "关"))
+
+        if on_change then
+            on_change(toggle)
+        end
+    end)
+
+    return button
 end
 
 --------------------------------
@@ -226,6 +241,23 @@ function GET_RUNNING_MISSION_CONTROLLER_SCRIPT()
     return nil
 end
 
+function SPOOF_SCRIPT(script_name, func)
+    script.run_in_fiber(function()
+        if not IS_SCRIPT_RUNNING(script_name) then
+            return
+        end
+        network.force_script_host(script_name)
+
+        script.execute_as_script(script_name, function()
+            if not NETWORK.NETWORK_IS_HOST_OF_THIS_SCRIPT() then
+                return
+            end
+
+            func(script_name)
+        end)
+    end)
+end
+
 --------------------------------
 -- Online Functions
 --------------------------------
@@ -271,54 +303,50 @@ end
 
 local Globals <const> = {
     GlobalplayerBD = function()
-        return 2657971 + 1 + PLAYER.PLAYER_ID() * 465
+        return 2657991 + 1 + PLAYER.PLAYER_ID() * 467
     end,
 
     GlobalplayerBD_FM = function()
-        return 1845281 + 1 + PLAYER.PLAYER_ID() * 883
-    end,
-
-    GlobalplayerBD_FM_2 = function()
-        return 1882632 + 1 + PLAYER.PLAYER_ID() * 146
+        return 1845221 + 1 + PLAYER.PLAYER_ID() * 889
     end,
 
     GlobalplayerBD_FM_3 = function()
-        return 1887305 + 1 + PLAYER.PLAYER_ID() * 610
+        return 1887549 + 1 + PLAYER.PLAYER_ID() * 611
     end,
+
+    g_Outgoing_Call_Pause_Answering_Time = 23446,
 }
 
 
 -- FMMC_GLOBAL_STRUCT
-local g_FMMC_STRUCT <const> = 4718592
-local FMMC_STRUCT <const> = {
-    iNumParticipants = g_FMMC_STRUCT + 3522,
-    iMinNumParticipants = g_FMMC_STRUCT + 3523,
+local _g_FMMC_STRUCT <const> = 4718592
+local g_FMMC_STRUCT <const> = {
+    iNumParticipants = _g_FMMC_STRUCT + 3522,
+    iMinNumParticipants = _g_FMMC_STRUCT + 3523,
 
-    iDifficulity = g_FMMC_STRUCT + 3525,
-    iNumberOfTeams = g_FMMC_STRUCT + 3526,
-    iMaxNumberOfTeams = g_FMMC_STRUCT + 3527,
-    iNumPlayersPerTeam = g_FMMC_STRUCT + 3529 + 1, -- +[0~3]
+    iDifficulity = _g_FMMC_STRUCT + 3525,
+    iNumberOfTeams = _g_FMMC_STRUCT + 3526,
+    iMaxNumberOfTeams = _g_FMMC_STRUCT + 3527,
+    iNumPlayersPerTeam = _g_FMMC_STRUCT + 3529 + 1, -- +[0~3]
 
-    iRootContentIDHash = g_FMMC_STRUCT + 127178,
-    tl63MissionName = g_FMMC_STRUCT + 127185,
-    tl31LoadedContentID = g_FMMC_STRUCT + 127465,
-    tl23NextContentID = g_FMMC_STRUCT + 127493 + 1, -- +[0~5]*6
+    tl63MissionName = _g_FMMC_STRUCT + 127185,
+    iRootContentIDHash = _g_FMMC_STRUCT + 128476,
+    tl31LoadedContentID = _g_FMMC_STRUCT + 128763,
+    tl23NextContentID = _g_FMMC_STRUCT + 128791 + 1, -- +[0~5]*6
 
-    iFixedCamera = g_FMMC_STRUCT + 155346,
-    iCriticalMinimumForTeam = g_FMMC_STRUCT + 178821 + 1 -- +[0~3]
+    iFixedCamera = _g_FMMC_STRUCT + 157365,
+    iCriticalMinimumForTeam = _g_FMMC_STRUCT + 180865 + 1 -- +[0~3]
 }
 
 -- FMMC_ROCKSTAR_CREATED_STRUCT
 local _g_FMMC_ROCKSTAR_CREATED <const> = 794744
 local g_FMMC_ROCKSTAR_CREATED <const> = {
-    iTotalNumMissions     = _g_FMMC_ROCKSTAR_CREATED + 2,
-    sMissionHeaderVars    = _g_FMMC_ROCKSTAR_CREATED + 4 + 1,      -- +[iArrayPos]*89
-    sDefaultCoronaOptions = _g_FMMC_ROCKSTAR_CREATED + 135107 + 1, -- +[iArrayPos]*13
+    sMissionHeaderVars = _g_FMMC_ROCKSTAR_CREATED + 4 + 1 -- +[iArrayPos]*89
 }
 
 
 -- TRANSITION_SESSION_NON_RESET_VARS
-local _g_TransitionSessionNonResetVars <const> = 2685444
+local _g_TransitionSessionNonResetVars <const> = 2685658
 -- TRANSITION_SESSION_MAINTAIN_VARS
 local _sTransVars <const> = _g_TransitionSessionNonResetVars + 1
 
@@ -327,12 +355,12 @@ local g_TransitionSessionNonResetVars <const> = {
         iCoronaBitSet = _sTransVars + 2813
     },
 
-    bAmIHeistLeader = _g_TransitionSessionNonResetVars + 6381
+    bAmIHeistLeader = _g_TransitionSessionNonResetVars + 6393
 }
 
 
 -- FMMC_TRANSITION_SESSION_DATA
-local g_sTransitionSessionData <const> = 2684504
+local g_sTransitionSessionData <const> = 2684718
 
 -- FMMC_STRAND_MISSION_DATA
 local _sStrandMissionData <const> = g_sTransitionSessionData + 43
@@ -345,13 +373,13 @@ local sStrandMissionData <const> = {
 
 
 -- HEIST_CLIENT_PLANNING_LOCAL_DATA
-local _g_HeistPlanningClient <const> = 1930926
+local _g_HeistPlanningClient <const> = 1931285
 local g_HeistPlanningClient <const> = {
     bHeistCoronaActive = _g_HeistPlanningClient + 2816
 }
 
 -- HEIST_CLIENT_SHARED_LOCAL_DATA
-local _g_HeistSharedClient <const> = 1934536
+local _g_HeistSharedClient <const> = 1934895
 local g_HeistSharedClient <const> = {
     PlanningBoardIndex = _g_HeistSharedClient,
     vBoardPosition = _g_HeistSharedClient + 16
@@ -362,15 +390,21 @@ local g_HeistSharedClient <const> = {
 local GlobalPlayerBD_HeistIsland <const> = {
     -- HEIST_ISLAND_CONFIG
     sConfig = function()
-        return 1973625 + 1 + PLAYER.PLAYER_ID() * 53 + 5
+        return 1974391 + 1 + PLAYER.PLAYER_ID() * 53 + 5
     end
 }
 
 -- NET_HEIST_PLANNING_GENERIC_PLAYER_BD_DATA
 local GlobalPlayerBD_NetHeistPlanningGeneric <const> = {
     stFinaleLaunchTimer = function()
-        return 1972760 + 1 + PLAYER.PLAYER_ID() * 27 + 18
+        return 1973526 + 1 + PLAYER.PLAYER_ID() * 27 + 18
     end
+}
+
+
+-- SIMPLE_INTERIOR_GLOBAL_DATA
+local g_SimpleInteriorData <const> = {
+    bTriggerExit = 1943917 + 3847
 }
 
 
@@ -380,61 +414,55 @@ local GlobalPlayerBD_NetHeistPlanningGeneric <const> = {
 
 local Locals <const> = {
     ["fm_mission_controller"] = {
-        iNextMission = 19746 + 1062,
-        iTeamScore = 19746 + 1232 + 1, -- +[0~3]
+        iNextMission = 19781 + 1062,
+        iTeamScore = 19781 + 1232 + 1, -- +[0~3]
 
-        iServerGameState = 19746,
-        iServerBitSet = 19746 + 1,
-        iServerBitSet1 = 19746 + 2,
+        iServerGameState = 19781,
+        iServerBitSet = 19781 + 1,
+        iServerBitSet1 = 19781 + 2,
 
         iClientBitSet = function()
-            return 31621 + 1 + NETWORK.PARTICIPANT_ID_TO_INT() * 292 + 127
+            return 31656 + 1 + NETWORK.PARTICIPANT_ID_TO_INT() * 293 + 127
         end,
 
-        iLocalBoolCheck11 = 15166,
+        iLocalBoolCheck11 = 15200,
 
-        tdObjectiveLimitTimer = 26172 + 740 + 1,      -- +[0~3]*2
-        tdMultiObjectiveLimitTimer = 26172 + 749 + 1, -- +[0~3]*2
-        iMultiObjectiveTimeLimit = 26172 + 765 + 1    -- +[0~3]
+        tdObjectiveLimitTimer = 26207 + 740 + 1,      -- +[0~3]*2
+        tdMultiObjectiveLimitTimer = 26207 + 749 + 1, -- +[0~3]*2
+        iMultiObjectiveTimeLimit = 26207 + 765 + 1    -- +[0~3]
     },
     ["fm_mission_controller_2020"] = {
-        iNextMission = 50150 + 1583,
-        iTeamScore = 50150 + 1770 + 1, -- +[0~3]
+        iNextMission = 52171 + 1589,
+        iTeamScore = 52171 + 1776 + 1, -- +[0~3]
 
-        iServerGameState = 50150,
-        iServerBitSet = 50150 + 1,
-        iServerBitSet1 = 50150 + 2,
+        iServerGameState = 52171,
+        iServerBitSet = 52171 + 1,
+        iServerBitSet1 = 52171 + 2,
 
-        iLocalBoolCheck11 = 48799,
+        iLocalBoolCheck11 = 50815,
 
-        tdObjectiveLimitTimer = 56798 + 297 + 1,      -- +[0~3]*2
-        tdMultiObjectiveLimitTimer = 56798 + 306 + 1, -- +[0~3]*2
-        iMultiObjectiveTimeLimit = 56798 + 322 + 1    -- +[0~3]
+        tdObjectiveLimitTimer = 58874 + 297 + 1,      -- +[0~3]*2
+        tdMultiObjectiveLimitTimer = 58874 + 306 + 1, -- +[0~3]*2
+        iMultiObjectiveTimeLimit = 58874 + 322 + 1    -- +[0~3]
     },
 
-    ["fm_content_security_contract"] = {
-        iGenericBitset = 7058,
-        eEndReason = 7136 + 1278
-    },
-    ["fm_content_payphone_hit"] = {
-        iGenericBitset = 5616,
-        eEndReason = 5675 + 683,
-        iMissionServerBitSet = 5675 + 740
-    },
+
     ["fm_content_auto_shop_delivery"] = {
-        iGenericBitset = 1518,
-        eEndReason = 1572 + 83,
-        iMissionEntityBitSet = 1572 + 2 + 5
+        iMissionEntityBitSet = 1625 + 2 + 5
     },
     ["fm_content_bike_shop_delivery"] = {
-        iGenericBitset = 1518,
-        eEndReason = 1574 + 83,
-        iMissionEntityBitSet = 1574 + 2 + 5
+        iMissionEntityBitSet = 1627 + 2 + 5
+    },
+    ["fm_content_payphone_hit"] = {
+        iMissionServerBitSet = 5778 + 747
+    },
+    ["fm_content_smuggler_ops"] = {
+        iMissionBitSet = 7728 + 1334
     },
 }
 
 -- MISSION_TO_LAUNCH_DETAILS
-local _sLaunchMissionDetails <const> = 19709
+local _sLaunchMissionDetails <const> = 19875
 local sLaunchMissionDetails <const> = {
     iMinPlayers = _sLaunchMissionDetails + 15,
     iMaxParticipants = _sLaunchMissionDetails + 32,
@@ -443,7 +471,7 @@ local sLaunchMissionDetails <const> = {
 
 -- `freemode` Time Trial
 -- AMTT_VARS_STRUCT
-local sTTVarsStruct <const> = 14386
+local sTTVarsStruct <const> = 14486
 local TTVarsStruct <const> = {
     iVariation = sTTVarsStruct + 11,
     trialTimer = sTTVarsStruct + 13,
@@ -453,7 +481,7 @@ local TTVarsStruct <const> = {
 
 -- `freemode` RC Bandito Time Trial
 -- AMRCTT_VARS_STRUCT
-local sRCTTVarsStruct <const> = 14436
+local sRCTTVarsStruct <const> = 14536
 local RCTTVarsStruct <const> = {
     eVariation = sRCTTVarsStruct,
     eRunStage = sRCTTVarsStruct + 2,
@@ -462,74 +490,316 @@ local RCTTVarsStruct <const> = {
 }
 
 
-local fm_content_xxx = {
-    { script = "fm_content_acid_lab_sell",       eEndReason = 5483 + 1294,  iGenericBitset = 5418 },
-    { script = "fm_content_acid_lab_setup",      eEndReason = 3348 + 541,   iGenericBitset = 3294 },
-    { script = "fm_content_acid_lab_source",     eEndReason = 7654 + 1162,  iGenericBitset = 7577 },
-    { script = "fm_content_ammunation",          eEndReason = 2079 + 204,   iGenericBitset = 2025 },
-    { script = "fm_content_armoured_truck",      eEndReason = 1902 + 113,   iGenericBitset = 1836 },
-    { script = "fm_content_auto_shop_delivery",  eEndReason = 1572 + 83,    iGenericBitset = 1518 },
-    { script = "fm_content_bank_shootout",       eEndReason = 2209 + 221,   iGenericBitset = 2138 },
-    { script = "fm_content_bar_resupply",        eEndReason = 2275 + 287,   iGenericBitset = 2219 },
-    { script = "fm_content_bicycle_time_trial",  eEndReason = 2942 + 83,    iGenericBitset = 2886 },
-    { script = "fm_content_bike_shop_delivery",  eEndReason = 1574 + 83,    iGenericBitset = 1518 },
-    { script = "fm_content_bounty_targets",      eEndReason = 7019 + 1251,  iGenericBitset = 6941 },
-    { script = "fm_content_business_battles",    eEndReason = 5257 + 1138,  iGenericBitset = 5186 },
-    { script = "fm_content_cargo",               eEndReason = 5830 + 1148,  iGenericBitset = 5761 },
-    { script = "fm_content_cerberus",            eEndReason = 1589 + 91,    iGenericBitset = 1539 },
-    { script = "fm_content_chop_shop_delivery",  eEndReason = 1893 + 137,   iGenericBitset = 1835 },
-    { script = "fm_content_clubhouse_contracts", eEndReason = 6639 + 1255,  iGenericBitset = 6573 },
-    { script = "fm_content_club_management",     eEndReason = 5207 + 775,   iGenericBitset = 5148 },
-    { script = "fm_content_club_odd_jobs",       eEndReason = 1794 + 83,    iGenericBitset = 1738 },
-    { script = "fm_content_club_source",         eEndReason = 3540 + 674,   iGenericBitset = 3467 },
-    { script = "fm_content_convoy",              eEndReason = 2736 + 437,   iGenericBitset = 2672 },
-    { script = "fm_content_crime_scene",         eEndReason = 1948 + 151,   iGenericBitset = 1892 },
-    { script = "fm_content_daily_bounty",        eEndReason = 2533 + 325,   iGenericBitset = 2480 },
-    { script = "fm_content_dispatch_work",       eEndReason = 4856 + 755,   iGenericBitset = 4797 },
-    { script = "fm_content_drug_lab_work",       eEndReason = 7884 + 1253,  iGenericBitset = 7820 },
-    { script = "fm_content_drug_vehicle",        eEndReason = 1762 + 115,   iGenericBitset = 1707 },
-    { script = "fm_content_export_cargo",        eEndReason = 2200 + 191,   iGenericBitset = 2146 },
-    { script = "fm_content_ghosthunt",           eEndReason = 1552 + 88,    iGenericBitset = 1499 },
-    { script = "fm_content_golden_gun",          eEndReason = 1762 + 93,    iGenericBitset = 1711 },
-    { script = "fm_content_gunrunning",          eEndReason = 5639 + 1237,  iGenericBitset = 5566 },
-    { script = "fm_content_island_dj",           eEndReason = 3451 + 495,   iGenericBitset = 3374 },
-    { script = "fm_content_island_heist",        eEndReason = 13311 + 1339, iGenericBitset = 13220 },
-    { script = "fm_content_metal_detector",      eEndReason = 1810 + 93,    iGenericBitset = 1757 },
-    { script = "fm_content_movie_props",         eEndReason = 1888 + 137,   iGenericBitset = 1833 },
-    { script = "fm_content_parachuter",          eEndReason = 1568 + 83,    iGenericBitset = 1518 },
-    { script = "fm_content_payphone_hit",        eEndReason = 5675 + 683,   iGenericBitset = 5616 },
-    { script = "fm_content_phantom_car",         eEndReason = 1577 + 83,    iGenericBitset = 1527 },
-    { script = "fm_content_pizza_delivery",      eEndReason = 1704 + 83,    iGenericBitset = 1648 },
-    { script = "fm_content_possessed_animals",   eEndReason = 1593 + 83,    iGenericBitset = 1541 },
-    { script = "fm_content_robbery",             eEndReason = 1732 + 87,    iGenericBitset = 1666 },
-    { script = "fm_content_security_contract",   eEndReason = 7136 + 1278,  iGenericBitset = 7058 },
-    { script = "fm_content_sightseeing",         eEndReason = 1822 + 84,    iGenericBitset = 1770 },
-    { script = "fm_content_skydive",             eEndReason = 3010 + 93,    iGenericBitset = 2953 },
-    { script = "fm_content_slasher",             eEndReason = 1597 + 83,    iGenericBitset = 1545 },
-    { script = "fm_content_smuggler_ops",        eEndReason = 7600 + 1270,  iGenericBitset = 7523 },
-    { script = "fm_content_smuggler_plane",      eEndReason = 1838 + 178,   iGenericBitset = 1771 },
-    { script = "fm_content_smuggler_resupply",   eEndReason = 6045 + 1271,  iGenericBitset = 5966 },
-    { script = "fm_content_smuggler_sell",       eEndReason = 4015 + 489,   iGenericBitset = 3880 },
-    { script = "fm_content_smuggler_trail",      eEndReason = 2051 + 130,   iGenericBitset = 1980 },
-    { script = "fm_content_source_research",     eEndReason = 4318 + 1195,  iGenericBitset = 4261 },
-    { script = "fm_content_stash_house",         eEndReason = 3521 + 475,   iGenericBitset = 3467 },
-    { script = "fm_content_taxi_driver",         eEndReason = 1993 + 83,    iGenericBitset = 1941 },
-    { script = "fm_content_tow_truck_work",      eEndReason = 1755 + 91,    iGenericBitset = 1702 },
-    { script = "fm_content_tuner_robbery",       eEndReason = 7313 + 1194,  iGenericBitset = 7226 },
-    { script = "fm_content_ufo_abduction",       eEndReason = 2858 + 334,   iGenericBitset = 2792 },
-    { script = "fm_content_vehicle_list",        eEndReason = 1568 + 83,    iGenericBitset = 1518 },
-    { script = "fm_content_vehrob_arena",        eEndReason = 7807 + 1285,  iGenericBitset = 7748 },
-    { script = "fm_content_vehrob_cargo_ship",   eEndReason = 7025 + 1224,  iGenericBitset = 6934 },
-    { script = "fm_content_vehrob_casino_prize", eEndReason = 9060 + 1231,  iGenericBitset = 8979 },
-    { script = "fm_content_vehrob_disrupt",      eEndReason = 4570 + 924,   iGenericBitset = 4511 },
-    { script = "fm_content_vehrob_police",       eEndReason = 8847 + 1276,  iGenericBitset = 8772 },
-    { script = "fm_content_vehrob_prep",         eEndReason = 11366 + 1272, iGenericBitset = 11265 },
-    { script = "fm_content_vehrob_scoping",      eEndReason = 3752 + 508,   iGenericBitset = 3695 },
-    { script = "fm_content_vehrob_submarine",    eEndReason = 6125 + 1137,  iGenericBitset = 6041 },
-    { script = "fm_content_vehrob_task",         eEndReason = 4773 + 1043,  iGenericBitset = 4705 },
-    { script = "fm_content_vip_contract_1",      eEndReason = 8692 + 1157,  iGenericBitset = 8619 },
-    { script = "fm_content_xmas_mugger",         eEndReason = 1620 + 83,    iGenericBitset = 1568 },
-    { script = "fm_content_xmas_truck",          eEndReason = 1461 + 91,    iGenericBitset = 1409 },
+local FM_CONTENT_XXX = {
+    ["fm_content_acid_lab_sell"] = {
+        eEndReason = 5653 + 1309,
+        iGenericBitset = 5557
+    },
+    ["fm_content_acid_lab_setup"] = {
+        eEndReason = 3421 + 541,
+        iGenericBitset = 3355
+    },
+    ["fm_content_acid_lab_source"] = {
+        eEndReason = 7771 + 1165,
+        iGenericBitset = 7663
+    },
+    ["fm_content_ammunation"] = {
+        eEndReason = 2140 + 204,
+        iGenericBitset = 2081
+    },
+    ["fm_content_armoured_truck"] = {
+        eEndReason = 1975 + 113,
+        iGenericBitset = 1906
+    },
+    ["fm_content_arms_trafficking"] = {
+        eEndReason = 5718 + 1237,
+        iGenericBitset = 5597
+    },
+    ["fm_content_auto_shop_delivery"] = {
+        eEndReason = 1625 + 83,
+        iGenericBitset = 1569
+    },
+    ["fm_content_bank_shootout"] = {
+        eEndReason = 2284 + 221,
+        iGenericBitset = 2206
+    },
+    ["fm_content_bar_resupply"] = {
+        eEndReason = 2344 + 287,
+        iGenericBitset = 2281
+    },
+    ["fm_content_bicycle_time_trial"] = {
+        eEndReason = 3058 + 83,
+        iGenericBitset = 3000
+    },
+    ["fm_content_bike_shop_delivery"] = {
+        eEndReason = 1627 + 83,
+        iGenericBitset = 1569
+    },
+    ["fm_content_bounty_targets"] = {
+        eEndReason = 7137 + 1254,
+        iGenericBitset = 7028
+    },
+    ["fm_content_business_battles"] = {
+        eEndReason = 5365 + 1138,
+        iGenericBitset = 5263
+    },
+    ["fm_content_cargo"] = {
+        eEndReason = 5979 + 1157,
+        iGenericBitset = 5883
+    },
+    ["fm_content_cerberus"] = {
+        eEndReason = 1642 + 91,
+        iGenericBitset = 1590
+    },
+    ["fm_content_chop_shop_delivery"] = {
+        eEndReason = 1957 + 137,
+        iGenericBitset = 1897
+    },
+    ["fm_content_clubhouse_contracts"] = {
+        eEndReason = 6761 + 1258,
+        iGenericBitset = 6664
+    },
+    ["fm_content_club_management"] = {
+        eEndReason = 5307 + 784,
+        iGenericBitset = 5229
+    },
+    ["fm_content_club_odd_jobs"] = {
+        eEndReason = 1856 + 83,
+        iGenericBitset = 1798
+    },
+    ["fm_content_club_source"] = {
+        eEndReason = 3632 + 674,
+        iGenericBitset = 3539
+    },
+    ["fm_content_community_outreach"] = {
+        eEndReason = 2066 + 191,
+        iGenericBitset = 2008
+    },
+    ["fm_content_convoy"] = {
+        eEndReason = 2812 + 437,
+        iGenericBitset = 2737
+    },
+    ["fm_content_crime_scene"] = {
+        eEndReason = 2023 + 151,
+        iGenericBitset = 1964
+    },
+    ["fm_content_daily_bounty"] = {
+        eEndReason = 2612 + 328,
+        iGenericBitset = 2549
+    },
+    ["fm_content_dispatch_work"] = {
+        eEndReason = 5622 + 972,
+        iGenericBitset = 5535
+    },
+    ["fm_content_drug_lab_work"] = {
+        eEndReason = 8010 + 1262,
+        iGenericBitset = 7915
+    },
+    ["fm_content_drug_vehicle"] = {
+        eEndReason = 1820 + 115,
+        iGenericBitset = 1762
+    },
+    ["fm_content_export_cargo"] = {
+        eEndReason = 2263 + 191,
+        iGenericBitset = 2204
+    },
+    ["fm_content_ghosthunt"] = {
+        eEndReason = 1606 + 88,
+        iGenericBitset = 1551
+    },
+    ["fm_content_golden_gun"] = {
+        eEndReason = 1833 + 93,
+        iGenericBitset = 1780
+    },
+    ["fm_content_gunrunning"] = {
+        eEndReason = 5759 + 1237,
+        iGenericBitset = 5655
+    },
+    ["fm_content_hacker_cargo_finale"] = {
+        eEndReason = 7671 + 1289,
+        iGenericBitset = 7535
+    },
+    ["fm_content_hacker_cargo_prep"] = {
+        eEndReason = 5336 + 1099,
+        iGenericBitset = 5247
+    },
+    ["fm_content_hacker_house_finale"] = {
+        eEndReason = 8126 + 1173,
+        iGenericBitset = 8001
+    },
+    ["fm_content_hacker_house_prep"] = {
+        eEndReason = 6976 + 1283,
+        iGenericBitset = 6844
+    },
+    ["fm_content_hacker_whistle_fin"] = {
+        eEndReason = 6653 + 1162,
+        iGenericBitset = 6514
+    },
+    ["fm_content_hacker_whistle_prep"] = {
+        eEndReason = 6475 + 982,
+        iGenericBitset = 6371
+    },
+    ["fm_content_hacker_zancudo_fin"] = {
+        eEndReason = 8535 + 1166,
+        iGenericBitset = 8431
+    },
+    ["fm_content_hacker_zancudo_prep"] = {
+        eEndReason = 5279 + 988,
+        iGenericBitset = 5174
+    },
+    ["fm_content_island_dj"] = {
+        eEndReason = 3532 + 501,
+        iGenericBitset = 3442
+    },
+    ["fm_content_island_heist"] = {
+        eEndReason = 13433 + 1357,
+        iGenericBitset = 13311
+    },
+    ["fm_content_metal_detector"] = {
+        eEndReason = 1881 + 93,
+        iGenericBitset = 1826
+    },
+    ["fm_content_movie_props"] = {
+        eEndReason = 1947 + 137,
+        iGenericBitset = 1888
+    },
+    ["fm_content_parachuter"] = {
+        eEndReason = 1621 + 83,
+        iGenericBitset = 1569
+    },
+    ["fm_content_payphone_hit"] = {
+        eEndReason = 5778 + 689,
+        iGenericBitset = 5703
+    },
+    ["fm_content_phantom_car"] = {
+        eEndReason = 1630 + 83,
+        iGenericBitset = 1578
+    },
+    ["fm_content_pizza_delivery"] = {
+        eEndReason = 1774 + 83,
+        iGenericBitset = 1716
+    },
+    ["fm_content_possessed_animals"] = {
+        eEndReason = 1646 + 83,
+        iGenericBitset = 1592
+    },
+    ["fm_content_robbery"] = {
+        eEndReason = 1809 + 87,
+        iGenericBitset = 1741
+    },
+    ["fm_content_security_contract"] = {
+        eEndReason = 7268 + 1295,
+        iGenericBitset = 7159
+    },
+    ["fm_content_sightseeing"] = {
+        eEndReason = 1875 + 84,
+        iGenericBitset = 1821
+    },
+    ["fm_content_skydive"] = {
+        eEndReason = 3120 + 93,
+        iGenericBitset = 3061
+    },
+    ["fm_content_slasher"] = {
+        eEndReason = 1650 + 83,
+        iGenericBitset = 1596
+    },
+    ["fm_content_smuggler_ops"] = {
+        eEndReason = 7728 + 1276,
+        iGenericBitset = 7620
+    },
+    ["fm_content_smuggler_plane"] = {
+        eEndReason = 1894 + 178,
+        iGenericBitset = 1823
+    },
+    ["fm_content_smuggler_resupply"] = {
+        eEndReason = 6166 + 1277,
+        iGenericBitset = 6056
+    },
+    ["fm_content_smuggler_sell"] = {
+        eEndReason = 4133 + 489,
+        iGenericBitset = 3991
+    },
+    ["fm_content_smuggler_trail"] = {
+        eEndReason = 2122 + 130,
+        iGenericBitset = 2048
+    },
+    ["fm_content_source_research"] = {
+        eEndReason = 4431 + 1198,
+        iGenericBitset = 4343
+    },
+    ["fm_content_stash_house"] = {
+        eEndReason = 3602 + 475,
+        iGenericBitset = 3538
+    },
+    ["fm_content_taxi_driver"] = {
+        eEndReason = 2066 + 83,
+        iGenericBitset = 2012
+    },
+    ["fm_content_tow_truck_work"] = {
+        eEndReason = 1812 + 91,
+        iGenericBitset = 1757
+    },
+    ["fm_content_tuner_robbery"] = {
+        eEndReason = 7436 + 1200,
+        iGenericBitset = 7322
+    },
+    ["fm_content_ufo_abduction"] = {
+        eEndReason = 2934 + 334,
+        iGenericBitset = 2861
+    },
+    ["fm_content_vehicle_list"] = {
+        eEndReason = 1621 + 83,
+        iGenericBitset = 1569
+    },
+    ["fm_content_vehrob_arena"] = {
+        eEndReason = 7922 + 1285,
+        iGenericBitset = 7832
+    },
+    ["fm_content_vehrob_cargo_ship"] = {
+        eEndReason = 7237 + 1227,
+        iGenericBitset = 7115
+    },
+    ["fm_content_vehrob_casino_prize"] = {
+        eEndReason = 9221 + 1234,
+        iGenericBitset = 9109
+    },
+    ["fm_content_vehrob_disrupt"] = {
+        eEndReason = 4680 + 924,
+        iGenericBitset = 4597
+    },
+    ["fm_content_vehrob_police"] = {
+        eEndReason = 9045 + 1279,
+        iGenericBitset = 8939
+    },
+    ["fm_content_vehrob_prep"] = {
+        eEndReason = 11493 + 1281,
+        iGenericBitset = 11361
+    },
+    ["fm_content_vehrob_scoping"] = {
+        eEndReason = 3839 + 508,
+        iGenericBitset = 3769
+    },
+    ["fm_content_vehrob_submarine"] = {
+        eEndReason = 6250 + 1137,
+        iGenericBitset = 6135
+    },
+    ["fm_content_vehrob_task"] = {
+        eEndReason = 4884 + 1046,
+        iGenericBitset = 4790
+    },
+    ["fm_content_vip_contract_1"] = {
+        eEndReason = 8817 + 1166,
+        iGenericBitset = 8713
+    },
+    ["fm_content_xmas_mugger"] = {
+        eEndReason = 1673 + 83,
+        iGenericBitset = 1619
+    },
+    ["fm_content_xmas_truck"] = {
+        eEndReason = 1520 + 91,
+        iGenericBitset = 1466
+    },
+
 }
 
 
@@ -560,8 +830,16 @@ local Tunables <const> = {
 -- Functions
 ------------------------
 
-local g_sCURRENT_UGC_STATUS <const> = 2693440
+local g_sCURRENT_UGC_STATUS <const> = 2693671
 local g_iMissionEnteryType <const> = 1057440
+
+local function CLEAR_TRANSITION_SESSIONS_CREATE_WITH_OPEN_MATCHMAKING()
+    GLOBAL_SET_INT(g_sTransitionSessionData + 717, 0)
+end
+
+local function SET_TRANSITION_SESSIONS_FORCE_ME_HOST_QUICK_MATCH()
+    GLOBAL_SET_INT(g_sTransitionSessionData + 719, 1)
+end
 
 local function _LAUNCH_MISSION(Data)
     local iArrayPos = MISC.GET_CONTENT_ID_INDEX(Data.iRootContentID)
@@ -569,7 +847,8 @@ local function _LAUNCH_MISSION(Data)
     local tlName = GLOBAL_GET_STRING(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89)
     local iMaxPlayers = GLOBAL_GET_INT(FMMC_ROCKSTAR_CREATED.sMissionHeaderVars + iArrayPos * 89 + 71)
 
-    GLOBAL_SET_INT(_g_TransitionSessionNonResetVars + 3850, 1)
+    GLOBAL_SET_INT(_g_TransitionSessionNonResetVars + 3851, 1)
+
     GLOBAL_SET_INT(g_sCURRENT_UGC_STATUS + 1, 0)
     GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 2)
 
@@ -577,36 +856,27 @@ local function _LAUNCH_MISSION(Data)
         GLOBAL_SET_INT(g_iMissionEnteryType, Data.iMissionEnteryType)
     end
 
-    if Data.iMissionType == 274 then
-        GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 13)
-        GLOBAL_SET_BIT(Globals.GlobalplayerBD_FM_2() + 33, 28)
-    elseif Data.iMissionType == 260 then
-        GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 11)
-        GLOBAL_SET_BIT(Globals.GlobalplayerBD_FM_2() + 33, 27)
-    elseif Data.iMissionType == 233 or Data.iMissionType == 235 then
-        GLOBAL_SET_BIT(g_sTransitionSessionData + 3, 4)
-        GLOBAL_SET_BIT(Globals.GlobalplayerBD_FM_2() + 33, 12)
-
-        GLOBAL_SET_BIT(g_sTransitionSessionData + 2, 29)
-    end
-
     GLOBAL_SET_INT(g_sTransitionSessionData + 9, Data.iMissionType)
     GLOBAL_SET_STRING(g_sTransitionSessionData + 863, tlName)
     GLOBAL_SET_INT(g_sTransitionSessionData + 42, iMaxPlayers)
+
     GLOBAL_CLEAR_BIT(g_sTransitionSessionData + 2, 14)
-    -- GLOBAL_SET_BIT(g_sTransitionSessionData, 5)
-    -- GLOBAL_SET_BIT(g_sTransitionSessionData, 8)
+
+    GLOBAL_SET_BIT(g_sTransitionSessionData, 5)
+    GLOBAL_SET_BIT(g_sTransitionSessionData, 8)
+
     GLOBAL_CLEAR_BIT(g_sTransitionSessionData, 7)
     GLOBAL_CLEAR_BIT(g_sTransitionSessionData, 15)
-    GLOBAL_SET_INT(g_sTransitionSessionData + 719, 1)
+
+    CLEAR_TRANSITION_SESSIONS_CREATE_WITH_OPEN_MATCHMAKING()
+    SET_TRANSITION_SESSIONS_FORCE_ME_HOST_QUICK_MATCH()
 
     GLOBAL_SET_INT(Globals.GlobalplayerBD_FM() + 96, 8)
 end
 
 -- g_structLocalHeistControl
 local g_sLocalMPHeistControl = {
-    _ = 2635126,
-    _lhcMyCorona = 2635126 + 3,
+    _lhcMyCorona = 2635079 + 3
 }
 
 -- g_structMyHeistCorona
@@ -646,12 +916,12 @@ end
 
 local function COMPLETE_DAILY_CHALLENGE()
     for i = 0, 2, 1 do
-        GLOBAL_SET_INT(2359296 + 1 + 0 * 5569 + 681 + 4244 + 1 + i * 3 + 1, 1)
+        GLOBAL_SET_INT(2359296 + 1 + 0 * 5571 + 681 + 4245 + 1 + i * 3 + 1, 1)
     end
 end
 
 local function COMPLETE_WEEKLY_CHALLENGE()
-    local g_sWeeklyChallenge = 2737993
+    local g_sWeeklyChallenge = 2738865
 
     GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 3, 0)
     GLOBAL_SET_INT(g_sWeeklyChallenge + 1 + 0 * 6 + 4, 0)
@@ -667,7 +937,7 @@ local function BROADCAST_GB_BOSS_WORK_REQUEST_SERVER(iMission)
 
     network.trigger_script_event(1 << user, {
         1613825825,
-        PLAYER.PLAYER_ID(),
+        user,
         -1,
         iMission,
         -1, -1, -1, -1
@@ -675,10 +945,8 @@ local function BROADCAST_GB_BOSS_WORK_REQUEST_SERVER(iMission)
 end
 
 local function INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
-    network.force_script_host(script_name)
-
-    LOCAL_SET_BIT(script_name, Locals[script_name].iGenericBitset + 1 + 0, 11)
-    LOCAL_SET_INT(script_name, Locals[script_name].eEndReason, 3)
+    LOCAL_SET_BIT(script_name, FM_CONTENT_XXX[script_name].iGenericBitset + 1 + 0, 11)
+    LOCAL_SET_INT(script_name, FM_CONTENT_XXX[script_name].eEndReason, 3)
 end
 
 -- `fm_mission_controller` and `fm_mission_controller_2020`
@@ -726,9 +994,9 @@ end
 
 function FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
     for i = 0, 5 do
-        local tl23NextContentID = GLOBAL_GET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6)
+        local tl23NextContentID = GLOBAL_GET_STRING(g_FMMC_STRUCT.tl23NextContentID + i * 6)
         if tl23NextContentID ~= "" then
-            GLOBAL_SET_STRING(FMMC_STRUCT.tl23NextContentID + i * 6, "")
+            GLOBAL_SET_STRING(g_FMMC_STRUCT.tl23NextContentID + i * 6, "")
         end
     end
 
@@ -799,12 +1067,15 @@ local function LAUNCH_MISSION(iRootContentIDHash)
             { "int",  iArrayPos }, -- iArrayPos
             { "bool", false },     -- bOnCall
             { "int",  -1 },        -- iPlaylistType
-            { "bool", true },     -- bSkipSkyCam
+            { "bool", true },      -- bSkipSkyCam
             { "bool", false },     -- bSetExitVector
             { "bool", false },     -- bFromWall
             { "bool", true },      -- bSetSkipWarning
             { "int",  -1 }         -- iForceJobEntryType
         })
+
+    CLEAR_TRANSITION_SESSIONS_CREATE_WITH_OPEN_MATCHMAKING()
+    SET_TRANSITION_SESSIONS_FORCE_ME_HOST_QUICK_MATCH()
 end
 
 --#endregion
@@ -1059,6 +1330,11 @@ local BusinessMonitor = {
         {
             name = "保金办公室",
             stat = "MPX_BAIL_SAFE_CASH_VALUE",
+            cap = 100000
+        },
+        {
+            name = "服装厂",
+            stat = "MPX_HDEN24_SAFE_CASH_VALUE",
             cap = 100000
         }
     }
@@ -1319,43 +1595,42 @@ menu_feemode_mission:add_text("部分任务需要注册为老大才可以开启"
 menu_feemode_mission:add_separator()
 menu_feemode_mission:add_text("<<  直接完成任务  >>")
 
-menu_feemode_mission:add_button("直接完成 安保合约", function()
+menu_feemode_mission:add_button("直接完成 fm_content 自由模式任务", function()
     script.run_in_fiber(function()
-        local script_name = "fm_content_security_contract"
-        if not IS_SCRIPT_RUNNING(script_name) then
-            return
+        for script_name, item in pairs(FM_CONTENT_XXX) do
+            if IS_SCRIPT_RUNNING(script_name) then
+                network.force_script_host(script_name)
+
+                script.execute_as_script(script_name, function()
+                    if not NETWORK.NETWORK_IS_HOST_OF_THIS_SCRIPT() then
+                        return
+                    end
+                    INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
+                end)
+            end
         end
-        INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
     end)
 end)
+menu_feemode_mission:add_sameline()
+menu_feemode_mission:add_text("可以完成大部分的自由模式任务，但部分任务并不会判定任务成功")
 
-menu_feemode_mission:add_button("直接完成 电话暗杀", function()
-    script.run_in_fiber(function()
-        local script_name = "fm_content_payphone_hit"
-        if not IS_SCRIPT_RUNNING(script_name) then
-            return
-        end
+
+menu_feemode_mission:add_button("直接完成 电话暗杀(暗杀奖励)", function()
+    SPOOF_SCRIPT("fm_content_payphone_hit", function(script_name)
+        LOCAL_SET_BIT(script_name, Locals[script_name].iMissionServerBitSet + 1, 1)
         INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
     end)
 end)
 menu_feemode_mission:add_sameline()
-menu_feemode_mission:add_button("直接完成 电话暗杀(暗杀奖励)", function()
-    script.run_in_fiber(function()
-        local script_name = "fm_content_payphone_hit"
-        if not IS_SCRIPT_RUNNING(script_name) then
-            return
-        end
-        LOCAL_SET_BIT(script_name, Locals[script_name].iMissionServerBitSet + 1, 1)
+menu_feemode_mission:add_button("直接完成 LSA 行动(附加行动)", function()
+    SPOOF_SCRIPT("fm_content_smuggler_ops", function(script_name)
+        LOCAL_SET_BIT(script_name, Locals[script_name].iMissionBitSet + 1 + 0, 0)
         INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
     end)
 end)
 
 menu_feemode_mission:add_button("直接完成 改装铺服务", function()
-    script.run_in_fiber(function()
-        local script_name = "fm_content_auto_shop_delivery"
-        if not IS_SCRIPT_RUNNING(script_name) then
-            return
-        end
+    SPOOF_SCRIPT("fm_content_auto_shop_delivery", function(script_name)
         if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
             TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
         end
@@ -1366,11 +1641,7 @@ menu_feemode_mission:add_button("直接完成 改装铺服务", function()
 end)
 menu_feemode_mission:add_sameline()
 menu_feemode_mission:add_button("直接完成 摩托车服务", function()
-    script.run_in_fiber(function()
-        local script_name = "fm_content_bike_shop_delivery"
-        if not IS_SCRIPT_RUNNING(script_name) then
-            return
-        end
+    SPOOF_SCRIPT("fm_content_bike_shop_delivery", function(script_name)
         if PED.IS_PED_IN_ANY_VEHICLE(PLAYER.PLAYER_PED_ID(), false) then
             TASK.CLEAR_PED_TASKS_IMMEDIATELY(PLAYER.PLAYER_PED_ID())
         end
@@ -1379,20 +1650,6 @@ menu_feemode_mission:add_button("直接完成 摩托车服务", function()
         INSTANT_FINISH_FM_CONTENT_MISSION(script_name)
     end)
 end)
-
-menu_feemode_mission:add_text("")
-
-menu_feemode_mission:add_button("直接完成 fm_content 自由模式任务", function()
-    script.run_in_fiber(function()
-        for _, item in pairs(fm_content_xxx) do
-            if IS_SCRIPT_RUNNING(item.script) then
-                LOCAL_SET_BIT(item.script, item.iGenericBitset + 1 + 0, 11)
-                LOCAL_SET_INT(item.script, item.eEndReason, 3)
-            end
-        end
-    end)
-end)
-menu_feemode_mission:add_text("可以完成大部分的自由模式任务，但部分任务并不会判定任务成功")
 
 
 menu_feemode_mission:add_separator()
@@ -1592,9 +1849,9 @@ IslandHeistConfig.menu.drawUI = function()
             GLOBAL_SET_INT(sConfig + 35, Data.eWeaponLoadout + 1)
             GLOBAL_SET_BOOL(sConfig + 38, Data.bHardModeEnabled)
             if Data.bHardModeEnabled then
-                GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 2)
+                GLOBAL_SET_INT(g_FMMC_STRUCT.iDifficulity, 2)
             else
-                GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 1)
+                GLOBAL_SET_INT(g_FMMC_STRUCT.iDifficulity, 1)
             end
             GLOBAL_SET_INT(sConfig + 39, Data.eApproachVehicle + 1)
             GLOBAL_SET_INT(sConfig + 40, Data.eInfiltrationPoint)
@@ -1634,13 +1891,13 @@ menu_mission:add_imgui(function()
     ImGui.SameLine()
     MenuHMission.SetMaxTeams = ImGui.Checkbox("最大团队数为 1 (用于多团队任务)", MenuHMission.SetMaxTeams)
 
-    if ImGui.Button("直接完成任务 (通用)") then
+    if ImGui.Button("直接完成任务 (通用)", 160, 40) then
         FM_MISSION_CONTROLLER.RUN(function(script_name)
             FM_MISSION_CONTROLLER.INSTANT_FINISH(script_name)
         end)
     end
     ImGui.SameLine()
-    if ImGui.Button("跳到下一个检查点 (解决单人任务卡关问题)") then
+    if ImGui.Button("跳到下一个检查点 (解决单人任务卡关问题)", 320, 40) then
         FM_MISSION_CONTROLLER.RUN(function(mission_script)
             LOCAL_SET_BIT(mission_script, Locals[mission_script].iServerBitSet1, 17)
         end)
@@ -1962,14 +2219,27 @@ end)
 
 local menu_automation <const> = menu_root:add_tab("[RSM] 自动化任务")
 
-
+--------------------
+-- Globals
+--------------------
 
 local bTransitionSessionSkipLbAndNjvs = g_sTransitionSessionData + 702
 
-local _coronaMenuData = 17445
+g_HeistPlanningClient.bLaunchTimerExpired = 1931285 + 2812
+
+local function GET_CORONA_STATUS()
+    return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193)
+end
+
+--------------------
+-- Locals
+--------------------
+
+local _coronaMenuData = 17602
 local coronaMenuData = {
-    iCurrentSelection = _coronaMenuData + 911
+    iCurrentSelection = _coronaMenuData + 920
 }
+
 
 
 local function _REGISTER_AS_A_CEO()
@@ -2030,7 +2300,7 @@ end
 
 local function JOIN_INVITE_ONLY_SESSION()
     script.run_in_fiber(function(script_util)
-        local g_Private_Players_FM_SESSION_Menu_Choice = 1575035
+        local g_Private_Players_FM_SESSION_Menu_Choice = 1575036
         local g_PauseMenuMissionCreatorData = {
             iBS_PauseMenuFlags = 1574589
         }
@@ -2050,11 +2320,6 @@ end
 
 
 
-
-g_HeistPlanningClient.bLaunchTimerExpired = 1930926 + 2812
-
-
-
 local CORONA_STATUS_ENUM = {
     CORONA_STATUS_IDLE = 0,
     CORONA_STATUS_INTRO = 9,
@@ -2063,9 +2328,7 @@ local CORONA_STATUS_ENUM = {
     CORONA_STATUS_GENERIC_HEIST_PLANNING = 34
 }
 
-local function GET_CORONA_STATUS()
-    return GLOBAL_GET_INT(Globals.GlobalplayerBD_FM() + 193)
-end
+
 
 
 --------------------------------
@@ -2291,7 +2554,7 @@ script.register_looped("RS_Missions.AutoIslandHeist", function(script_util)
                     }
                     GLOBAL_SET_INT(sConfig + 35, Data.eWeaponLoadout)
                     GLOBAL_SET_BOOL(sConfig + 38, Data.bHardModeEnabled)
-                    GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 1)
+                    GLOBAL_SET_INT(g_FMMC_STRUCT.iDifficulity, 1)
 
                     GLOBAL_SET_INT(sConfig + 39, Data.eApproachVehicle)
                     GLOBAL_SET_INT(sConfig + 40, Data.eInfiltrationPoint)
@@ -2421,9 +2684,9 @@ function AutoApartmentHeist.processHeistAward()
     local script_name = "fm_mission_controller"
 
     -- Ultimate Challenge
-    GLOBAL_SET_INT(FMMC_STRUCT.iDifficulity, 2)
+    GLOBAL_SET_INT(g_FMMC_STRUCT.iDifficulity, 2)
     -- First Person
-    GLOBAL_SET_INT(FMMC_STRUCT.iFixedCamera, 1)
+    GLOBAL_SET_INT(g_FMMC_STRUCT.iFixedCamera, 1)
     -- Member
     GLOBAL_SET_BOOL(g_TransitionSessionNonResetVars.bAmIHeistLeader, false)
     LOCAL_CLEAR_BIT(script_name, Locals[script_name].iClientBitSet(), 20) -- PBBOOL_HEIST_HOST
@@ -2690,6 +2953,76 @@ end)
 menu_misc:add_text("数值为0, 则不进行限制; 限制最低收入后, 差事最终结算时最低收入就为设置的值;")
 
 
+menu_misc:add_separator()
+menu_misc:add_text("<<  增强选项  >>")
+MenuMisc["SpeedDial"] = menu_misc:add_checkbox("快速拨号")
+menu_misc:add_sameline()
+menu_misc:add_button("离开当前室内", function()
+    GLOBAL_SET_BOOL(g_SimpleInteriorData.bTriggerExit, true)
+end)
+menu_misc:add_sameline()
+menu_misc:add_button("移除自由模式横幅通知", function()
+    script.run_in_fiber(function()
+        scr_function.call_script_function("freemode",
+            "CLEAR_ALL_BIG_MESSAGES",
+            "2D 00 03 00 00 71 39 02 38 02 74 5C 3A 00 38 02 61",
+            "void", {})
+    end)
+end)
+
+
+
+local Patcher = {}
+
+add_toggle_button(menu_misc, "移除洛圣都改车王限制", function(toggle)
+    local patch_name1 = "CAN_WE_USE_THIS_VEHICLE"
+    local patch_name2 = "SHOULD_CARMOD_MENU_OPTION_BE_BLOCKED"
+
+    if toggle then
+        if Patcher[patch_name1] and Patcher[patch_name2] then
+            Patcher[patch_name1]:enable_patch()
+            Patcher[patch_name2]:enable_patch()
+        else
+            Patcher[patch_name1] = scr_patch:new("carmod_shop",
+                "CAN_WE_USE_THIS_VEHICLE",
+                "2D 03 16 00 00 38 00 5D ? ? ? 56 04 00 71",
+                5,
+                { 0x72, 0x2E, 0x03, 0x01 })
+
+            Patcher[patch_name2] = scr_patch:new("carmod_shop",
+                "SHOULD_CARMOD_MENU_OPTION_BE_BLOCKED",
+                "2D 01 04 00 00 38 00 5D ? ? ? 5D ? ? ? 56 04 00 72 2E 01 01",
+                5,
+                { 0x71, 0x2E, 0x01, 0x01 })
+        end
+    else
+        Patcher[patch_name1]:disable_patch()
+        Patcher[patch_name2]:disable_patch()
+    end
+end)
+menu_misc:add_sameline()
+menu_misc:add_text("允许你驾驶任意载具进入洛圣都改车王进行改装")
+
+add_toggle_button(menu_misc, "修补单人赌场无法设置终章面板问题", function(toggle)
+    local patch_name = "SHOULD_CORONA_JOB_LAUNCH_AFTER_TRANSITION"
+
+    if toggle then
+        if Patcher[patch_name] then
+            Patcher[patch_name]:enable_patch()
+        else
+            Patcher[patch_name] = scr_patch:new("fmmc_launcher",
+                "SHOULD_CORONA_JOB_LAUNCH_AFTER_TRANSITION",
+                "2D 01 03 00 00 5D ? ? ? 2A 06 56 05 00 5D ? ? ? 20 2A 06 56 05 00 5D",
+                5,
+                { 0x71, 0x2E, 0x01, 0x01 })
+        end
+    else
+        Patcher[patch_name]:disable_patch()
+    end
+end)
+menu_misc:add_sameline()
+menu_misc:add_text("注意！确保在开始任务前开启，任务结束后关闭！不建议一直开启！")
+
 
 
 
@@ -2710,16 +3043,16 @@ script.register_looped("RS_Missions.Main", function()
                     LOCAL_SET_INT(script_name, sLaunchMissionDetails.iMinPlayers, 1)
                 end
 
-                GLOBAL_SET_INT(FMMC_STRUCT.iMinNumParticipants, 1)
-                GLOBAL_SET_INT(FMMC_STRUCT.iNumPlayersPerTeam, 1)
-                GLOBAL_SET_INT(FMMC_STRUCT.iCriticalMinimumForTeam, 0)
+                GLOBAL_SET_INT(g_FMMC_STRUCT.iMinNumParticipants, 1)
+                GLOBAL_SET_INT(g_FMMC_STRUCT.iNumPlayersPerTeam, 1)
+                GLOBAL_SET_INT(g_FMMC_STRUCT.iCriticalMinimumForTeam, 0)
             end
         end
     end
 
     if MenuHMission.SetMaxTeams then
-        GLOBAL_SET_INT(FMMC_STRUCT.iNumberOfTeams, 1)
-        GLOBAL_SET_INT(FMMC_STRUCT.iMaxNumberOfTeams, 1)
+        GLOBAL_SET_INT(g_FMMC_STRUCT.iNumberOfTeams, 1)
+        GLOBAL_SET_INT(g_FMMC_STRUCT.iMaxNumberOfTeams, 1)
     end
 
     if MenuHMission.DisableMissionAggroFail then
@@ -2749,8 +3082,14 @@ script.register_looped("RS_Missions.Main", function()
         end)
     end
 
-    if MenuHMission.DisableStatCapCheck then
+
+
+    if MenuMisc["DisableStatCapCheck"]:is_enabled() then
         GLOBAL_SET_INT(Tunables["DISABLE_STAT_CAP_CHECK"], 1)
+    end
+
+    if MenuMisc["SpeedDial"]:is_enabled() then
+        GLOBAL_SET_INT(Globals.g_Outgoing_Call_Pause_Answering_Time, 0)
     end
 end)
 
@@ -2765,5 +3104,22 @@ script.register_looped("RS_Missions.MissionEarning", function()
         if earning_min ~= 0 then
             GLOBAL_SET_FLOAT(Tunables["LOW_ROCKSTAR_MISSIONS_MODIFIER"], earning_min)
         end
+    end
+end)
+
+
+
+--------------------------------
+-- Menu Event
+--------------------------------
+
+event.register_handler(menu_event.ScriptsReloaded, function()
+    if Patcher["CAN_WE_USE_THIS_VEHICLE"] and Patcher["SHOULD_CARMOD_MENU_OPTION_BE_BLOCKED"] then
+        Patcher["CAN_WE_USE_THIS_VEHICLE"]:disable_patch()
+        Patcher["SHOULD_CARMOD_MENU_OPTION_BE_BLOCKED"]:disable_patch()
+    end
+
+    if Patcher["SHOULD_CORONA_JOB_LAUNCH_AFTER_TRANSITION"] then
+        Patcher["SHOULD_CORONA_JOB_LAUNCH_AFTER_TRANSITION"]:disable_patch()
     end
 end)
